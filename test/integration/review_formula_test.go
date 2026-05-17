@@ -24,6 +24,11 @@ import (
 // contention without letting a genuinely stuck workflow loiter.
 const reviewWorkflowTimeout = 18 * time.Minute
 
+// reviewWorkflowSlingTimeout only covers formula instantiation and source
+// routing. The personal-work graph is large enough that bd-backed graph apply
+// can exceed the generic 2-minute Dolt command budget on busy CI runners.
+const reviewWorkflowSlingTimeout = 5 * time.Minute
+
 const testAdoptPRReviewCheck = `#!/usr/bin/env bash
 set -euo pipefail
 
@@ -463,8 +468,9 @@ func startReviewWorkflow(t *testing.T, cityDir, formula string, vars map[string]
 	for k, v := range vars {
 		args = append(args, "--var", k+"="+v)
 	}
-	out, err = gcDolt(cityDir, args...)
+	out, err = gcDoltWithTimeout(cityDir, reviewWorkflowSlingTimeout, args...)
 	if err != nil {
+		dumpReviewFormulaCityState(t, cityDir)
 		t.Fatalf("gc sling failed: %v\noutput: %s", err, out)
 	}
 	slingOutput := out
@@ -531,6 +537,11 @@ func traceShowsSameAttemptTransientRetry(trace, stepRef string) bool {
 }
 
 func dumpWorkflowState(t *testing.T, cityDir, workflowID string) {
+	t.Helper()
+	dumpReviewFormulaCityState(t, cityDir)
+}
+
+func dumpReviewFormulaCityState(t *testing.T, cityDir string) {
 	t.Helper()
 	out, _ := bdDolt(cityDir, "list", "--json", "--all", "--limit=0")
 	t.Logf("all beads:\n%s", out)
