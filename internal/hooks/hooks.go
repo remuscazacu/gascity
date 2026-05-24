@@ -34,11 +34,13 @@ var supported = []string{"claude", "codex", "gemini", "kiro", "opencode", "copil
 const (
 	managedPiHookVersion       = 4
 	managedOpenCodeHookVersion = 2
+	managedOmpHookVersion      = 1
 )
 
 var (
 	piHookVersionPattern       = regexp.MustCompile(`\bGC_PI_HOOK_VERSION\s*=\s*([0-9]+)\b`)
 	opencodeHookVersionPattern = regexp.MustCompile(`\bGC_OPENCODE_HOOK_VERSION\s*=\s*([0-9]+)\b`)
+	ompHookVersionPattern      = regexp.MustCompile(`\bGC_OMP_HOOK_VERSION\s*=\s*([0-9]+)\b`)
 )
 
 // unwiredHookProviders lists provider names whose own CLIs do expose a
@@ -204,6 +206,9 @@ func overlayManagedNeedsUpgrade(provider, rel string) func([]byte) bool {
 	if provider == "opencode" && rel == path.Join(".opencode", "plugins", "gascity.js") {
 		return opencodeHookNeedsUpgrade
 	}
+	if provider == "omp" && rel == path.Join(".omp", "hooks", "gc-hook.ts") {
+		return ompHookNeedsUpgrade
+	}
 	return nil
 }
 
@@ -273,6 +278,45 @@ func opencodeHookNeedsUpgrade(existing []byte) bool {
 
 func opencodeHookVersion(content string) int {
 	match := opencodeHookVersionPattern.FindStringSubmatch(content)
+	if len(match) != 2 {
+		return 0
+	}
+	version, err := strconv.Atoi(match[1])
+	if err != nil {
+		return 0
+	}
+	return version
+}
+
+func ompHookNeedsUpgrade(existing []byte) bool {
+	content := string(existing)
+	if !strings.Contains(content, "Gas City hooks for Oh My Pi (OMP).") {
+		return false
+	}
+	if ompHookVersion(content) < managedOmpHookVersion ||
+		!strings.Contains(content, "gascityOmpExtension") ||
+		!strings.Contains(content, "GC_PROVIDER_SESSION_ID") ||
+		!strings.Contains(content, `pi.on("session_start"`) ||
+		!strings.Contains(content, `pi.on("session_compact"`) ||
+		!strings.Contains(content, `pi.on("before_agent_start"`) ||
+		!strings.Contains(content, "logRunFailure") {
+		return true
+	}
+	for _, marker := range []string{
+		"export default {",
+		`"session.created"`,
+		`"session.compacted"`,
+		`"experimental.chat.system.transform"`,
+	} {
+		if strings.Contains(content, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func ompHookVersion(content string) int {
+	match := ompHookVersionPattern.FindStringSubmatch(content)
 	if len(match) != 2 {
 		return 0
 	}
