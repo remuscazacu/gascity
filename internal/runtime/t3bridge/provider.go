@@ -458,6 +458,11 @@ func NewProvider() *Provider {
 func resolveLegacyStateDir() string {
 	stateDir := os.Getenv("GC_EXEC_STATE_DIR")
 	if stateDir != "" {
+		// GC_EXEC_STATE_DIR is trusted — it's set by the GC controller,
+		// not by external input. Validate it's an absolute path before use.
+		if !filepath.IsAbs(stateDir) {
+			return ""
+		}
 		return stateDir
 	}
 	home := os.Getenv("HOME")
@@ -472,11 +477,18 @@ func cleanupLegacyStateDir() {
 	if stateDir == "" {
 		return
 	}
+	// Only remove the well-known legacy path, never an env-selected directory.
+	if os.Getenv("GC_EXEC_STATE_DIR") != "" {
+		return
+	}
 	_ = os.RemoveAll(stateDir)
 }
 
 func resolveNativeStateDir() string {
 	if stateDir := os.Getenv("GC_T3BRIDGE_STATE_DIR"); stateDir != "" {
+		if !filepath.IsAbs(stateDir) {
+			return ""
+		}
 		return stateDir
 	}
 	home := os.Getenv("HOME")
@@ -519,6 +531,8 @@ func safeMetaPathComponent(value string) string {
 func metaFilePath(name, key string) string {
 	safeName := safeMetaPathComponent(name)
 	safeKey := safeMetaPathComponent(key)
+	// safeMetaPathComponent strips path separators and traversal sequences,
+	// so the resulting path is always safely contained within the state dir.
 	return filepath.Join(resolveNativeStateDir(), fmt.Sprintf("%s.meta.%s", safeName, safeKey))
 }
 

@@ -121,6 +121,9 @@ func t3BridgeStartupEnvelopeModel(provider string, tp TemplateParams) string {
 			}
 		}
 	}
+	if v := tp.Env["GC_MODEL"]; v != "" {
+		return v
+	}
 	if provider == "codex" {
 		return "gpt-5-codex"
 	}
