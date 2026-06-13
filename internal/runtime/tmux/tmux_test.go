@@ -17,9 +17,10 @@ import (
 )
 
 // testSocketName is the dedicated tmux socket used by this integration test
-// process. Including the PID prevents reused CI runners from inheriting a
-// stale fixed test socket from an earlier aborted run.
-var testSocketName = fmt.Sprintf("gc-test-%d", os.Getpid())
+// process. It uses the tmuxtest cleanup prefix and a per-process suffix so
+// reused CI runners cannot inherit a stale fixed test socket from an aborted
+// run.
+var testSocketName = fmt.Sprintf("gctest-%d-%d", os.Getpid(), time.Now().UnixNano())
 
 func hasTmux() bool {
 	_, err := exec.LookPath("tmux")
