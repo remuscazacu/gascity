@@ -8,7 +8,7 @@
 
 **Tech Stack:** Go 1.x, standard `testing`; gc build via `make build`/`make install`; provider Claude Code 2.1.177; tmux transport.
 
-**Spec:** `docs/specs/fix/2026-06-14-mcp-trust-modal-design.md`
+**Spec:** `engdocs/specs/fix/2026-06-14-mcp-trust-modal-design.md`
 
 **Branch:** `fix/ga-nan-mcp-trust-prompt` (already created on `remuscazacu/gascity`, synced to upstream `main`).
 
