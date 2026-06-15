@@ -1778,18 +1778,12 @@ max_active_sessions = 2
 	if err := os.MkdirAll(filepath.Dir(agentPath), 0o755); err != nil {
 		return err
 	}
-	prompt := `# Default Pool Inference Worker
-
-You are a pool worker for {{.City.Name}}.
-
-When started or nudged, run this exact command first:
-
-gc hook --claim --drain-ack --json
-
-If the JSON response says action "drain", exit. If it says action "work",
-read the returned bead_id with bd show <id>, do the requested task, and close
-that bead with bd close <id>. After closing work, run gc runtime drain-ack.
-`
+	promptPath := filepath.Join(helpers.FindModuleRoot(), "internal", "bootstrap", "packs", "core", "assets", "prompts", "pool-worker.md")
+	prompt, err := os.ReadFile(promptPath)
+	if err != nil {
+		return fmt.Errorf("reading canonical pool-worker prompt: %w", err)
+	}
+	prompt = append(prompt, []byte("\n## Worker Inference Fixture\n\nFor file-writing tasks in this live inference test, create or update the requested file before closing the work bead.\n")...)
 	if err := os.WriteFile(filepath.Join(filepath.Dir(agentPath), "prompt.template.md"), []byte(prompt), 0o644); err != nil {
 		return err
 	}
