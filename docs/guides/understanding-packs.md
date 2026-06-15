@@ -282,19 +282,22 @@ record to get paste-ready import commands:
 ```text
 $ gc pack registry search gascity
 Registry  Name     Latest  Description
-main      gascity  0.1.0   Gas City planning and implementation workflow pack
+main      gascity  0.1.4   Gas City planning and implementation workflow pack.
 
 $ gc pack registry show main:gascity
 Pack:        main:gascity
-Description: Gas City planning and implementation workflow pack
+Description: Gas City planning and implementation workflow pack.
 Source:      https://github.com/gastownhall/gascity-packs/tree/main/gascity
 Source kind: git
-Latest:      0.1.0
+Latest:      0.1.4
 Import commands:
-  This version or later: gc import add https://github.com/gastownhall/gascity-packs/tree/main/gascity --name gascity --version '>=0.1.0'
-  Exactly this version:  gc import add https://github.com/gastownhall/gascity-packs/tree/main/gascity --name gascity --version 0.1.0
+  This version or later: gc import add https://github.com/gastownhall/gascity-packs/tree/main/gascity --name gascity --version '>=0.1.4'
+  Exactly this version:  gc import add https://github.com/gastownhall/gascity-packs/tree/main/gascity --name gascity --version 0.1.4
 Releases:
-  0.1.0 v0.1.0 d3617d1319a
+  0.1.1 main 788b6e8ec224
+  0.1.2 main 5fc675b85d4a
+  0.1.3 main af1640917a24
+  0.1.4 main 99464ed9240b
 ```
 
 The first import command accepts the shown release or any newer match; the

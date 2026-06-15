@@ -173,7 +173,7 @@ check.
 | Tool | Min version | macOS | Linux |
 |------|-------------|-------|-------|
 | dolt | 2.1.0 or newer | `brew install dolt` | [releases](https://github.com/dolthub/dolt/releases) |
-| bd | 1.0.0 | [releases](https://github.com/gastownhall/beads/releases) | [releases](https://github.com/gastownhall/beads/releases) |
+| bd | 1.0.4 | [releases](https://github.com/gastownhall/beads/releases) | [releases](https://github.com/gastownhall/beads/releases) |
 | flock | -- | `brew install flock` | `apt install util-linux` |
 
 ### Optional for GitHub gates
@@ -219,7 +219,7 @@ Upgrade via Homebrew (`brew upgrade dolt`) or download a newer release from
 
 ## `bd` Version Too Old
 
-Gas City requires `bd` 1.0.0 or newer. The bd-backed store relies on
+Gas City requires `bd` 1.0.4 or newer. The bd-backed store relies on
 ephemeral-bead support used by order tracking, including `bd create
 --ephemeral` and `bd query ephemeral=true`, so older binaries can fail
 order tracking and the cleanup of those ephemeral beads. Check your

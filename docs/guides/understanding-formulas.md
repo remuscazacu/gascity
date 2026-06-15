@@ -447,7 +447,7 @@ gascity pack is pure-drain — zero `on_complete`, zero `tally`. Prefer drain
 when the set is convoy members; reach for `on_complete` only when the set
 exists solely in a step's output. (Raw `gc.output_json_required` fan-out is
 deprecated; `gc lint` warns `gc.output_json is deprecated; use drain in v2
-formulas`.)
+formulas (see: engdocs/drain-fanout.md)`.)
 
 See [drain](/reference/specs/formula-spec-v2#33-drain) and
 [on-complete and tally](/reference/specs/formula-spec-v2#34-on-complete-and-tally) in
