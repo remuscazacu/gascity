@@ -367,7 +367,7 @@ testing philosophy and tier boundaries.
   model, and order configuration
 - [Formulas architecture](formulas.md) -- formula resolution, layering,
   and symlink materialization
-- [Primitives](../../docs/concepts/primitives.md) -- the six-primitive user-facing model
+- [Primitives](../../docs/getting-started/how-gas-city-works.md) -- the six-primitive user-facing model
   the controller serves (Agent, Bead, Formula, Rig, Pack, Event)
 - [Code-layering View](nine-concepts.md) -- the deeper
   implementation-layering reference mapping the code substrate onto the six

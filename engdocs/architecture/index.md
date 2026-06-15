@@ -14,7 +14,7 @@ Start with the overview, then dive into the subsystem you need.
 ### Foundation
 
 1. **[Glossary](./glossary.md)** — authoritative definitions of all terms
-2. **[Primitives](../../docs/concepts/primitives.md)** — the six-primitive user-facing
+2. **[Primitives](../../docs/getting-started/how-gas-city-works.md)** — the six-primitive user-facing
    model (Agent, Bead, Formula, Rig, Pack, Event); start here for the
    conceptual overview
 3. **[Code-layering View](./nine-concepts.md)** — the deeper

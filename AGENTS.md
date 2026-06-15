@@ -110,7 +110,7 @@ why Gas City exists.)
 
 ### Code-layering view (implements the six primitives)
 
-> **Authoritative user model:** `docs/concepts/primitives.md` defines the
+> **Authoritative user model:** `docs/getting-started/how-gas-city-works.md` defines the
 > six primitives (**Agent** = WHO, **Bead** = WHAT, **Formula** = HOW,
 > **Rig** = WHERE, **Pack** = CONFIGURES, **Event** = OBSERVE). That is the
 > canonical conceptual model. The view below is the *code-layering lens*: it

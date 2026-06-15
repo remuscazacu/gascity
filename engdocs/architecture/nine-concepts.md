@@ -4,7 +4,7 @@ title: "Code-layering View (implements the six primitives)"
 
 > Last verified against code: 2026-04-25
 
-> **The authoritative user-facing model is [the six primitives](../../docs/concepts/primitives.md)** —
+> **The authoritative user-facing model is [the six primitives](../../docs/getting-started/how-gas-city-works.md)** —
 > Agent (who), Bead (what), Formula (how), Rig (where), Pack (configures),
 > and Event (observe). Read that first. This document is the deeper
 > *implementation-layering* reference: it maps the Go code substrate
@@ -267,7 +267,7 @@ Capabilities activate based on config section presence:
 
 ## See Also
 
-- [Primitives](../../docs/concepts/primitives.md) — the six-primitive user-facing model
+- [Primitives](../../docs/getting-started/how-gas-city-works.md) — the six-primitive user-facing model
   (Agent, Bead, Formula, Rig, Pack, Event); **start here**
 - [Glossary](glossary.md) — authoritative definitions of all terms used
   across the architecture docs
