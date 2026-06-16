@@ -73,6 +73,19 @@ check.
     tick-reason-attributed `bd`-call JSONL tracer gated on `GC_BD_TRACE_JSON`.
     **Phase 0's instrumentation already exists**; Phase 0 only adds an aggregator
     + repro procedure on the post-#3097 baseline (see `engdocs/plans/`).
+- **Phase-0 measurement (2026-06-16, native-store build of `origin/main`):** an
+  A/B on `gc order check` showed **43 `bd` subprocesses in CLI-fallback → 1 with
+  the native store** (a single order-eval pass). Two conclusions reshape the
+  scope:
+  1. The #2463/#3543 **`bd`-subprocess flood is overwhelmingly a CLI-fallback
+     artifact** (#3248), already solved by the native store (#3270/#3505). Our
+     #3543 incident ran in CLI-fallback (binary predated #3505) — confirmed by
+     reproducing its exact `gate=bd_context_agreement` warning.
+  2. **Metric pivot:** on the native store, reads are in-process and `bd`/sec is
+     no longer the right meter. The residual this design targets is **in-process
+     Dolt query volume** — measure via `Com_select`/sec, not `GC_BD_TRACE_JSON`.
+     Pillars 1/2 are re-justified on that axis; the Com_select baseline is the
+     outstanding gate (see `engdocs/plans/idle-controller-call-rate-phase0.md`).
 
 ## Problem Statement
 
