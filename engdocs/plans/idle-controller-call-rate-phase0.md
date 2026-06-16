@@ -131,20 +131,39 @@ modest** — orders of magnitude below @mmlac's 463/sec, which was a 16-agent
 (version/schema/`bd context`) that a long-running controller pays once, not per
 tick — so the true steady-state per-tick figure is lower still.
 
-**Not yet measured — long-running-controller idle `Com_select`/sec.** The
-gold-standard number (controller opens the store once, ticks at cadence, sampled
-over an idle window) is blocked on running the supervisor with **zero agents**:
-`[[patches.agent]] suspended=true` did not match the gastown pack agents at
-start-time composition (their `(dir,name)` differs from the `agent list` view),
-and suspending the whole city skips order dispatch (`order_dispatch.go:428`).
-Not worth risking a spawn of the autonomous `mayor` on a shared box. Resolve the
-patch targeting (or add a no-op provider), then sample `Com_select`/sec for:
+**Long-running-controller idle `Com_select`/sec — attempted, contaminated.** A
+long-running isolated supervisor (open-once, tick at 30 s) was run on the
+native-store baseline. `[[patches.agent]] suspended=true` for the three
+auto-start agents (`boot`/`deacon`/`mayor` — verified by `gc start --dry-run`
+reporting "0 agents would start") successfully stopped autonomous spawns. Over a
+90 s window:
+
+| window | Com_select Δ | rate |
+|---|--:|--:|
+| 0–45 s (controller ticking) | 422 | ~9.4 /sec |
+| 45–90 s | 2125 | ~47 /sec |
+
+**But the run was contaminated:** the controller dispatched **housekeeping pool
+work** that spawned an ephemeral `gastown.dog` agent (a real
+`claude --dangerously-skip-permissions`) despite the autonomous agents being
+suspended. The 45–90 s spike is that dog's startup `work_query` pipelines, not
+controller idle. The dog was killed within ~2 min; only a brief, bounded number
+of dog invocations occurred.
+
+**Finding:** a gastown city has **no truly agentless idle state** — the
+controller's own housekeeping orders route work to the dog pool, spawning agents
+on-demand. Suspending the autonomous agents is not sufficient to quiesce it.
+A clean controller-only number needs *also* disabling the housekeeping orders
+that generate dog work (or measuring on a minimal non-gastown city with core
+orders only). Even so, the early/uncontaminated signal (~9 `Com_select`/sec) and
+the per-eval figure (~56 ÷ 30 s ≈ 2 /sec from order dispatch) both confirm the
+idle native-store rate is **single-digit to low-tens /sec — modest**, orders of
+magnitude below the 463/sec active-town figure.
 
 | Shape | window | Com_select/sec | notes |
 |---|---|---|---|
-| single-rig idle (long-running) | | | open-once; the true steady-state |
-| 8-rig active | | | does it scale with rig count? |
-| 8-rig, 7 suspended | | | confirms #3097 suspended-skip |
+| native-store, autonomous-agents-suspended | 90 s | ~9 idle → ~47 w/ housekeeping dog | contaminated by pool-dog spawn |
+| clean controller-only (orders+housekeeping disabled) | | | TODO — needs order-level quiesce |
 
 ## What the numbers decide
 
