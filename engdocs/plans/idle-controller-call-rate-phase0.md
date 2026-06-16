@@ -1,12 +1,8 @@
----
-title: "idle-controller-call-rate — Phase 0: Baseline measurement"
-description: Reproducible procedure to measure the idle controller bd-call rate on a native-store build, gating the optimisation pillars.
-status: In progress
-design: ../design/idle-controller-call-rate.md
-issues: [3543, 2463]
----
+# Plan: idle-controller-call-rate — Phase 0 baseline measurement
 
-# Phase 0 — Baseline measurement
+> **Status:** In progress — 2026-06-16
+> **Design:** [`idle-controller-call-rate`](../design/idle-controller-call-rate.md)
+> **Issues:** #3543, #2463
 
 Phase 0 of [`idle-controller-call-rate`](../design/idle-controller-call-rate.md).
 It produces the numbers that **gate** every optimisation pillar. No optimisation

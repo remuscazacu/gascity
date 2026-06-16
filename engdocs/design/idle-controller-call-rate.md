@@ -1,9 +1,14 @@
 ---
-title: Idle Controller Call-Rate Reduction
-description: Cut the controller's steady-state bd/Dolt call *rate* (Layer 3 of #2463) so an idle or quiescent city does not saturate the host, independent of per-call cost.
-status: Proposed
-issues: [3543, 2463]
+title: "Idle Controller Call-Rate Reduction"
 ---
+
+| Field | Value |
+|---|---|
+| Status | Proposed |
+| Date | 2026-06-16 |
+| Author(s) | Claude (Opus 4.8) |
+| Issue | #3543, #2463 |
+| Supersedes | N/A |
 
 # Idle Controller Call-Rate Reduction
 
@@ -65,10 +70,12 @@ check.
     and honors `event_hooks=false`. Together with the order-dispatcher's existing
     suspended-skip (`cmd/gc/order_dispatch.go:423,476`), **Pillar 3 is essentially
     already shipped** — see that pillar for the small residual.
-  - **#3270 (merged) + #2928** — native store runs with gc-owned hooks; per-write
-    event hooks are toggleable. So a build from `origin/main` is a **valid
-    native-store baseline** (no need to wait for #3505, which only drops the
-    now-redundant hooks).
+  - **#3270 + #2928 (merged), #3505 (merged in `gastownhall/gascity` main — this
+    PR's base)** — native store runs with gc-owned hooks; per-write event hooks
+    are toggleable; #3505 drops the now-redundant forwarder hooks. #3270 alone
+    already makes the native store eligible, so the Phase-0 *build* (the fork's
+    `origin/main`, which predated #3505) is a **valid native-store baseline**;
+    #3505 is a further cleanup, not a prerequisite.
   - **#2485 (merged)** — `internal/beads/bdtrace.go`: a scope-classified,
     tick-reason-attributed `bd`-call JSONL tracer gated on `GC_BD_TRACE_JSON`.
     **Phase 0's instrumentation already exists**; Phase 0 only adds an aggregator
@@ -134,9 +141,10 @@ Reads (`list`+`query`+`show`) are **81%** of calls. Corroborating data points:
   idle-timeout paths around `cmd/gc/session_reconciler.go` — flagged by
   @sjarmak on #2463 as the *top* idle-read candidates; line numbers drift across
   `main`).
-- **Subprocess multiplier.** Each read is `exec.CommandContext(ctx, "bd", …)`
-  (`internal/beads/bdstore.go:381`) when the native store is unavailable — spawn
-  + connect + query per call.
+- **Subprocess multiplier.** When the native store is unavailable each read
+  shells out via `exec.CommandContext(ctx, name, args…)` in
+  `ExecCommandRunnerWithEnv` (`internal/beads/bdstore.go:105`) — spawn + connect
+  + query per call.
 
 ### The #3248 multiplier (and why #3543's own diagnosis was incomplete)
 
@@ -351,7 +359,7 @@ until validated, then defaults flipped.
 - Code anchors: `cmd/gc/cmd_supervisor.go:1344-1370`,
   `cmd/gc/city_runtime.go:900-1054,1256-1268`, `cmd/gc/order_dispatch.go:~460-640`,
   `internal/orders/triggers.go:238-258`, `cmd/gc/session_reconciler.go` (idle/
-  restart paths), `internal/beads/bdstore.go:381`,
+  restart paths), `internal/beads/bdstore.go:105` (`ExecCommandRunnerWithEnv`),
   `internal/beads/caching_store_reconcile.go`, `internal/beads/factory.go:42-150`.
 </content>
 </invoke>
