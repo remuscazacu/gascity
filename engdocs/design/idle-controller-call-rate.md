@@ -38,21 +38,41 @@ The proposal is four pillars, ordered by confidence:
 2. **Single-snapshot per-pass evaluation** *(contingent on measurement)* —
    collapse residual per-order / per-session read fan-out within a pass into one
    snapshot read, reusing #3492's `ListQuery.LabelPrefix` primitive.
-3. **Quiescent-scope skipping + cursor sanity** — stop sweeping suspended rigs
-   and fix the phantom event-cursor backlog they report.
+3. **Quiescent-scope skipping + cursor sanity** — *largely shipped by #3097 +
+   `order_dispatch.go` suspended-skip; only a small residual remains* (see
+   pillar). Kept for the record and the cursor-sanity gap.
 4. **Snapshot-served hot hooks** *(secondary)* — serve `gc hook` / `gc mail
    check` / `gc rig list --json` from a cached controller snapshot instead of a
    fresh per-call fan-out.
 
-A cross-cutting **bd-call-rate budget + meter** makes the win measurable and
-guards against regression — directly implementing @coffeegoddd's "GC/GT should
-rate limit usage of bd commands."
+A cross-cutting **bd-call-rate budget + doctor guard** makes the win measurable
+and prevents regression — directly implementing @coffeegoddd's "GC/GT should
+rate limit usage of bd commands." The *measurement* half already exists
+(`GC_BD_TRACE_JSON`, #2485); the new part is a budget + a `bd-call-rate` doctor
+check.
 
 ## Decision Log / Status
 
-- **Proposed** (this revision). No code landed. Phase 0 (instrumentation +
-  post-#3505 baseline) **gates** the rest: pillar ordering and the Phase-3 go/no-go
-  depend on measured residual rate, not on the pre-#3505 CLI-fallback numbers.
+- **Proposed** (this revision). No new optimisation code landed. Phase 0
+  (baseline measurement on a native-store build) **gates** the rest: pillar
+  ordering and the Phase-3 go/no-go depend on the measured residual rate, not on
+  the pre-fix CLI-fallback numbers.
+- **Revision after re-checking `origin/main` (a2b890dd7):** three relevant fixes
+  already landed and reshape this design:
+  - **#3097 (merged 2026-06-05)** — "cut supervisor reconcile CPU": skips the
+    beads-cache reconcile loop for suspended rigs (~167-253% → ~19% on a
+    5-active/8-suspended city), memoizes pack-hash + remote-cache across ticks,
+    and honors `event_hooks=false`. Together with the order-dispatcher's existing
+    suspended-skip (`cmd/gc/order_dispatch.go:423,476`), **Pillar 3 is essentially
+    already shipped** — see that pillar for the small residual.
+  - **#3270 (merged) + #2928** — native store runs with gc-owned hooks; per-write
+    event hooks are toggleable. So a build from `origin/main` is a **valid
+    native-store baseline** (no need to wait for #3505, which only drops the
+    now-redundant hooks).
+  - **#2485 (merged)** — `internal/beads/bdtrace.go`: a scope-classified,
+    tick-reason-attributed `bd`-call JSONL tracer gated on `GC_BD_TRACE_JSON`.
+    **Phase 0's instrumentation already exists**; Phase 0 only adds an aggregator
+    + repro procedure on the post-#3097 baseline (see `engdocs/plans/`).
 
 ## Problem Statement
 
@@ -156,6 +176,15 @@ multiplier for our specific numbers**, and it is already fixed upstream
   *feed* N+1. Pillar 2 **reuses that primitive** for the dispatch path, which
   #3492 does not touch. **#3511 (draft):** indexed order-run lookups in doctor —
   complementary.
+- **#3097 (merged):** "cut supervisor reconcile CPU" — suspended-rig cache-
+  reconcile skip + pack-hash/remote-cache memoization + `event_hooks` gate.
+  **Supersedes most of Pillar 3** and reduces per-tick *cost*; this design's
+  Pillars 1/2 reduce per-tick *count*, which #3097 does not address.
+- **#2485 (merged):** `GC_BD_TRACE_JSON` scope-classified call tracer. Phase 0's
+  meter; the cross-cutting `bd-call-rate` doctor check builds on it.
+- **#3270 (merged) + #2928:** native store runs with gc-owned hooks +
+  `event_hooks` toggle — establishes the native-store baseline this design
+  optimises on top of.
 
 ## Design
 
@@ -199,15 +228,23 @@ are already cache hits. Phase 0 must measure the residual per-pass fan-out
 *after* #3505 before investing here; if the cache already serves them, Pillar 2
 is low-value and is dropped.
 
-### Pillar 3 — Quiescent-scope skipping + cursor sanity
+### Pillar 3 — Quiescent-scope skipping + cursor sanity *(largely shipped)*
 
-- **Skip suspended rigs.** Do not evaluate orders or run runtime probes for a
-  suspended rig. (#3543: 15 of 16 rig DBs were empty/idle yet swept; @mmlac:
-  suspended rigs are probed and report phantom backlogs.)
-- **Cursor sanity.** Fix the phantom event-cursor backlog where a suspended,
-  0-issue rig reports hundreds of thousands of "pending `bead.updated`" events
-  (cursor 0 vs a growing sequence). Initialise/clamp cursors so a quiescent
-  scope yields an empty event match without a scan.
+**Mostly done in `origin/main`** — verify against the Phase-0 trace before
+proposing any further work here:
+
+- **Skip suspended rigs.** Already implemented: #3097 skips the beads-cache
+  reconcile loop for suspended rigs, and the order dispatcher skips suspended
+  cities and suspended-rig-targeted orders (`cmd/gc/order_dispatch.go:423,476`).
+  This is the bulk of the #3543 win (our 15-of-16 idle rig DBs are now skipped).
+- **Residual to confirm:** per-rig *runtime probes* on the
+  `gc rig list --json` path (@Cdfghglz measured a core pegged); these may not be
+  covered by the dispatch/reconcile skip. Phase 0 will show whether they still
+  fire for suspended rigs.
+- **Cursor sanity (likely still open).** The phantom event-cursor backlog where
+  a suspended, 0-issue rig reports hundreds of thousands of "pending
+  `bead.updated`" events (@mmlac) — initialise/clamp cursors so a quiescent scope
+  yields an empty event match without a scan. Confirm against the trace.
 
 ### Pillar 4 — Snapshot-served hot hooks *(secondary)*
 
@@ -232,11 +269,15 @@ line.
 TDD / red-green; each phase independently shippable behind a flag, default-off
 until validated, then defaults flipped.
 
-- **Phase 0 — Instrument & baseline (gating).**
-  Land the calls/sec meter + a reproducible idle harness. Measure idle rate on a
-  **post-#3505** single-rig and multi-rig city. *Output:* the residual-rate
-  numbers that set thresholds and the Phase-3 go/no-go. *Nothing else proceeds
-  without these.*
+- **Phase 0 — Baseline (gating). *In progress.***
+  Instrumentation already exists (`GC_BD_TRACE_JSON`, #2485). This phase adds an
+  **aggregator + repro procedure** (`engdocs/plans/idle-controller-call-rate-phase0.md`,
+  `scripts/bd-call-rate/`) and measures the idle rate on a **native-store build of
+  `origin/main`** (post-#3097/#3270 — `/tmp/gc-baseline` builds clean), single-rig
+  and multi-rig. *Output:* the residual rate per subcommand **and per trace scope**
+  (order-dispatch vs tick-body vs bead-event-watcher vs hook-cascade), which sets
+  thresholds, confirms the Pillar-3 residual, and decides the Pillar-2 go/no-go.
+  *Nothing else proceeds without these numbers.*
 
 - **Phase 1 — Demand-gated ticking (Pillar 1).**
   Tests: a pass with no demand schedules a backed-off next tick; each wake
