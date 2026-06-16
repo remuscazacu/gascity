@@ -117,11 +117,38 @@ agents (incl. the autonomous `mayor`) can't be suspended via `gc agent suspend`
 (pack-defined → needs `[[patches.agent]] suspended=true`, ambiguous for the two
 `dog` agents). Resolve that targeting, then measure `Com_select`.
 
-| Shape | window | Com_select/sec | bd subprocs/sec | notes |
-|---|---|---|---|---|
-| single-rig idle | | | | |
-| 8-rig active | | | | |
-| 8-rig, 7 suspended | | | | |
+**In-process Dolt query volume (the real residual), single-rig native-store city:**
+
+Measured `Com_select` (`SHOW GLOBAL STATUS`, via `dolt --host …:32033 --no-tls`)
+across a loop of `gc order check`:
+
+| metric | value |
+|---|--:|
+| `Com_select` per `gc order check` | **~56** (incl. per-process native-store *open* overhead) |
+| back-to-back loop rate (20 checks / 19 s) | ~59 `Com_select`/sec |
+| **estimated idle order-dispatch rate** (56 ÷ 30 s patrol) | **~1.9 `Com_select`/sec** |
+
+So the in-process query *volume per order-eval is real* (~56), but at the idle
+patrol cadence (one eval / 30 s) the **steady-state order-dispatch Dolt load is
+modest** — orders of magnitude below @mmlac's 463/sec, which was a 16-agent
+*active* town, not idle. The 56 is also inflated by per-invocation store-open
+(version/schema/`bd context`) that a long-running controller pays once, not per
+tick — so the true steady-state per-tick figure is lower still.
+
+**Not yet measured — long-running-controller idle `Com_select`/sec.** The
+gold-standard number (controller opens the store once, ticks at cadence, sampled
+over an idle window) is blocked on running the supervisor with **zero agents**:
+`[[patches.agent]] suspended=true` did not match the gastown pack agents at
+start-time composition (their `(dir,name)` differs from the `agent list` view),
+and suspending the whole city skips order dispatch (`order_dispatch.go:428`).
+Not worth risking a spawn of the autonomous `mayor` on a shared box. Resolve the
+patch targeting (or add a no-op provider), then sample `Com_select`/sec for:
+
+| Shape | window | Com_select/sec | notes |
+|---|---|---|---|
+| single-rig idle (long-running) | | | open-once; the true steady-state |
+| 8-rig active | | | does it scale with rig count? |
+| 8-rig, 7 suspended | | | confirms #3097 suspended-skip |
 
 ## What the numbers decide
 
