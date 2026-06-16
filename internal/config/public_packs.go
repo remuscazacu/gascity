@@ -72,4 +72,5 @@ var SupersededPublicGascityPackVersions = []string{
 	"sha:af1640917a24f88126c37a1e3697a619b731cc0f",
 	"sha:99464ed9240b1f6e6b7ab1d351f67016e1a973ff",
 	"sha:39f07fed3524c016482b82fa0d4973aa6b4fc05e",
+	"sha:7aedf80cfa39905bee4104095bfae8a02c67aaa1",
 }
