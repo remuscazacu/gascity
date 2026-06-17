@@ -446,6 +446,68 @@ func TestProcessScopeCheckAbortsScopeOnFailure(t *testing.T) {
 	}
 }
 
+func TestProcessScopeCheckHardFailureOverridesClosedPassBody(t *testing.T) {
+	t.Parallel()
+
+	store := beads.NewMemStore()
+	body := mustCreateWorkflowBead(t, store, beads.Bead{
+		Title:  "body",
+		Type:   "task",
+		Status: "closed",
+		Metadata: map[string]string{
+			"gc.kind":         "scope",
+			"gc.scope_role":   "body",
+			"gc.root_bead_id": "wf-1",
+			"gc.step_ref":     "demo.body",
+			"gc.outcome":      "pass",
+		},
+	})
+	failed := mustCreateWorkflowBead(t, store, beads.Bead{
+		Title:  "preflight",
+		Type:   "task",
+		Status: "closed",
+		Metadata: map[string]string{
+			"gc.root_bead_id":  "wf-1",
+			"gc.scope_ref":     "body",
+			"gc.scope_role":    "member",
+			"gc.outcome":       "fail",
+			"gc.failure_class": "hard",
+			"gc.on_fail":       "abort_scope",
+			"preflight.report": "failed",
+		},
+	})
+	control := mustCreateWorkflowBead(t, store, beads.Bead{
+		Title: "Finalize scope for preflight",
+		Type:  "task",
+		Metadata: map[string]string{
+			"gc.kind":         "scope-check",
+			"gc.root_bead_id": "wf-1",
+			"gc.scope_ref":    "body",
+			"gc.scope_role":   "control",
+		},
+	})
+	mustDepAdd(t, store, control.ID, failed.ID, "blocks")
+
+	result, err := ProcessControl(store, mustGetBead(t, store, control.ID), ProcessOptions{})
+	if err != nil {
+		t.Fatalf("ProcessControl(scope-check hard fail): %v", err)
+	}
+	if !result.Processed || result.Action != "scope-fail" {
+		t.Fatalf("scope result = %+v, want processed scope-fail", result)
+	}
+
+	bodyAfter := mustGetBead(t, store, body.ID)
+	if bodyAfter.Status != "closed" {
+		t.Fatalf("body status = %q, want closed", bodyAfter.Status)
+	}
+	if got := bodyAfter.Metadata["gc.outcome"]; got != "fail" {
+		t.Fatalf("body outcome = %q, want fail", got)
+	}
+	if got := bodyAfter.Metadata["preflight.report"]; got != "failed" {
+		t.Fatalf("body preflight.report = %q, want failed", got)
+	}
+}
+
 // scopeCheckAbortScopeFixture builds the canonical scope topology used by the
 // gc.on_fail=abort_scope contract tests: a scope body, a closed subject member
 // (metadata supplied by the caller), the subject's scope-check control, and a
@@ -2213,6 +2275,140 @@ func TestProcessWorkflowFinalizeAbortScopeBareCloseFailsWorkflow(t *testing.T) {
 	rootAfter := mustGetBead(t, store, workflow.ID)
 	if rootAfter.Status != "closed" || rootAfter.Metadata["gc.outcome"] != "fail" {
 		t.Fatalf("workflow = status %q outcome %q, want closed/fail", rootAfter.Status, rootAfter.Metadata["gc.outcome"])
+	}
+}
+
+func TestProcessWorkflowFinalizeFailsOnHardFailedAbortScopeDescendant(t *testing.T) {
+	t.Parallel()
+
+	store := beads.NewMemStore()
+	workflow := mustCreateWorkflowBead(t, store, beads.Bead{
+		Title: "workflow",
+		Type:  "task",
+		Metadata: map[string]string{
+			"gc.kind":             "workflow",
+			"gc.formula_contract": "graph.v2",
+		},
+	})
+	_ = mustCreateWorkflowBead(t, store, beads.Bead{
+		Title:  "body",
+		Type:   "task",
+		Status: "closed",
+		Metadata: map[string]string{
+			"gc.kind":         "scope",
+			"gc.scope_role":   "body",
+			"gc.root_bead_id": workflow.ID,
+			"gc.step_ref":     "demo.body",
+			"gc.outcome":      "pass",
+		},
+	})
+	_ = mustCreateWorkflowBead(t, store, beads.Bead{
+		Title:  "preflight",
+		Type:   "task",
+		Status: "closed",
+		Metadata: map[string]string{
+			"gc.root_bead_id":  workflow.ID,
+			"gc.scope_ref":     "body",
+			"gc.scope_role":    "member",
+			"gc.outcome":       "fail",
+			"gc.failure_class": "hard",
+			"gc.on_fail":       "abort_scope",
+		},
+	})
+	cleanup := mustCreateWorkflowBead(t, store, beads.Bead{
+		Title:  "cleanup",
+		Type:   "task",
+		Status: "closed",
+		Metadata: map[string]string{
+			"gc.root_bead_id": workflow.ID,
+			"gc.kind":         "cleanup",
+			"gc.outcome":      "pass",
+		},
+	})
+	finalizer := mustCreateWorkflowBead(t, store, beads.Bead{
+		Title: "Finalize workflow",
+		Type:  "task",
+		Metadata: map[string]string{
+			"gc.kind":         "workflow-finalize",
+			"gc.root_bead_id": workflow.ID,
+		},
+	})
+
+	mustDepAdd(t, store, finalizer.ID, cleanup.ID, "blocks")
+	mustDepAdd(t, store, workflow.ID, finalizer.ID, "blocks")
+
+	result, err := ProcessControl(store, finalizer, ProcessOptions{})
+	if err != nil {
+		t.Fatalf("ProcessControl(workflow-finalize): %v", err)
+	}
+	if !result.Processed || result.Action != "workflow-fail" {
+		t.Fatalf("workflow result = %+v, want processed workflow-fail", result)
+	}
+	rootAfter := mustGetBead(t, store, workflow.ID)
+	if rootAfter.Status != "closed" || rootAfter.Metadata["gc.outcome"] != "fail" {
+		t.Fatalf("workflow = status %q outcome %q, want closed/fail", rootAfter.Status, rootAfter.Metadata["gc.outcome"])
+	}
+}
+
+func TestProcessWorkflowFinalizeIgnoresTransientRetryDescendant(t *testing.T) {
+	t.Parallel()
+
+	store := beads.NewMemStore()
+	workflow := mustCreateWorkflowBead(t, store, beads.Bead{
+		Title: "workflow",
+		Type:  "task",
+		Metadata: map[string]string{
+			"gc.kind":             "workflow",
+			"gc.formula_contract": "graph.v2",
+		},
+	})
+	_ = mustCreateWorkflowBead(t, store, beads.Bead{
+		Title:  "retry attempt 1",
+		Type:   "task",
+		Status: "closed",
+		Metadata: map[string]string{
+			"gc.kind":          "retry-run",
+			"gc.root_bead_id":  workflow.ID,
+			"gc.scope_ref":     "body",
+			"gc.scope_role":    "member",
+			"gc.outcome":       "fail",
+			"gc.failure_class": "transient",
+			"gc.on_fail":       "abort_scope",
+			"gc.attempt":       "1",
+		},
+	})
+	cleanup := mustCreateWorkflowBead(t, store, beads.Bead{
+		Title:  "cleanup",
+		Type:   "task",
+		Status: "closed",
+		Metadata: map[string]string{
+			"gc.root_bead_id": workflow.ID,
+			"gc.kind":         "cleanup",
+			"gc.outcome":      "pass",
+		},
+	})
+	finalizer := mustCreateWorkflowBead(t, store, beads.Bead{
+		Title: "Finalize workflow",
+		Type:  "task",
+		Metadata: map[string]string{
+			"gc.kind":         "workflow-finalize",
+			"gc.root_bead_id": workflow.ID,
+		},
+	})
+
+	mustDepAdd(t, store, finalizer.ID, cleanup.ID, "blocks")
+	mustDepAdd(t, store, workflow.ID, finalizer.ID, "blocks")
+
+	result, err := ProcessControl(store, finalizer, ProcessOptions{})
+	if err != nil {
+		t.Fatalf("ProcessControl(workflow-finalize): %v", err)
+	}
+	if !result.Processed || result.Action != "workflow-pass" {
+		t.Fatalf("workflow result = %+v, want processed workflow-pass", result)
+	}
+	rootAfter := mustGetBead(t, store, workflow.ID)
+	if rootAfter.Status != "closed" || rootAfter.Metadata["gc.outcome"] != "pass" {
+		t.Fatalf("workflow = status %q outcome %q, want closed/pass", rootAfter.Status, rootAfter.Metadata["gc.outcome"])
 	}
 }
 

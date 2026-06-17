@@ -316,12 +316,15 @@ func processScopeCheck(store beads.Store, bead beads.Bead, opts ProcessOptions) 
 		if err != nil {
 			return ControlResult{}, fmt.Errorf("%s: aborting scope: %w", bead.ID, err)
 		}
-		if body.Status != "closed" {
-			if err := tracePhaseErr(opts, bead.ID, "close-body-fail", func() error {
-				return setOutcomeAndClose(store, body.ID, "fail")
-			}); err != nil {
-				return ControlResult{}, fmt.Errorf("%s: completing scope body: %w", body.ID, err)
-			}
+		if err := tracePhaseErr(opts, bead.ID, "propagate-metadata", func() error {
+			return snapshot.propagateScopeMemberMetadata(store, body.ID)
+		}); err != nil {
+			return ControlResult{}, fmt.Errorf("%s: propagating scope metadata: %w", bead.ID, err)
+		}
+		if err := tracePhaseErr(opts, bead.ID, "close-body-fail", func() error {
+			return setOutcomeAndClose(store, body.ID, "fail")
+		}); err != nil {
+			return ControlResult{}, fmt.Errorf("%s: completing scope body: %w", body.ID, err)
 		}
 		if err := tracePhaseErr(opts, bead.ID, "close-control", func() error {
 			return setOutcomeAndClose(store, bead.ID, "pass")
@@ -676,7 +679,7 @@ func processWorkflowFinalize(store beads.Store, bead beads.Bead, opts ProcessOpt
 		return ControlResult{}, fmt.Errorf("%s: missing gc.root_bead_id", bead.ID)
 	}
 
-	outcome, err := resolveFinalizeOutcome(store, bead.ID)
+	outcome, err := resolveFinalizeOutcome(store, bead)
 	if err != nil {
 		if errors.Is(err, errFinalizePending) {
 			return ControlResult{}, ErrControlPending
@@ -1100,15 +1103,13 @@ func reconcileTerminalScopedMemberWithOptions(store beads.Store, bead beads.Bead
 		if err != nil {
 			return ControlResult{}, fmt.Errorf("%s: aborting scope: %w", bead.ID, err)
 		}
-		if body.Status != "closed" {
-			// Propagate non-gc.* member metadata (e.g., review.verdict) onto the
-			// scope body before closing, so diagnostics survive failure auto-close.
-			if err := snapshot.propagateScopeMemberMetadata(store, body.ID); err != nil {
-				return ControlResult{}, fmt.Errorf("%s: propagating scope metadata: %w", bead.ID, err)
-			}
-			if err := setOutcomeAndClose(store, body.ID, "fail"); err != nil {
-				return ControlResult{}, fmt.Errorf("%s: completing scope body: %w", body.ID, err)
-			}
+		// Propagate non-gc.* member metadata (e.g., review.verdict) onto the
+		// scope body before closing, so diagnostics survive failure auto-close.
+		if err := snapshot.propagateScopeMemberMetadata(store, body.ID); err != nil {
+			return ControlResult{}, fmt.Errorf("%s: propagating scope metadata: %w", bead.ID, err)
+		}
+		if err := setOutcomeAndClose(store, body.ID, "fail"); err != nil {
+			return ControlResult{}, fmt.Errorf("%s: completing scope body: %w", body.ID, err)
 		}
 		return ControlResult{Processed: true, Action: "scope-fail", Skipped: skipped}, nil
 	}
@@ -1435,7 +1436,25 @@ func matchesScopeRef(bead beads.Bead, scopeRef string) bool {
 	return stepRef == scopeRef || strings.HasSuffix(stepRef, "."+scopeRef)
 }
 
-func resolveFinalizeOutcome(store beads.Store, beadID string) (string, error) {
+func resolveFinalizeOutcome(store beads.Store, finalizer beads.Bead) (string, error) {
+	outcome, err := resolveBlockedOutcome(store, finalizer.ID)
+	if err != nil {
+		return "", err
+	}
+	rootID := strings.TrimSpace(finalizer.Metadata[beadmeta.RootBeadIDMetadataKey])
+	if outcome == "pass" && rootID != "" {
+		failed, err := workflowRootHasTerminalAbortScopeFailure(store, rootID, finalizer.ID)
+		if err != nil {
+			return "", err
+		}
+		if failed {
+			outcome = "fail"
+		}
+	}
+	return outcome, nil
+}
+
+func resolveBlockedOutcome(store beads.Store, beadID string) (string, error) {
 	deps, err := store.DepList(beadID, "down")
 	if err != nil {
 		return "", err
@@ -1457,4 +1476,40 @@ func resolveFinalizeOutcome(store beads.Store, beadID string) (string, error) {
 		}
 	}
 	return outcome, nil
+}
+
+func workflowRootHasTerminalAbortScopeFailure(store beads.Store, rootID, finalizerID string) (bool, error) {
+	all, err := listByWorkflowRoot(store, rootID)
+	if err != nil {
+		return false, err
+	}
+	for _, candidate := range all {
+		if candidate.ID == finalizerID {
+			continue
+		}
+		if terminalAbortScopeFailure(candidate) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func terminalAbortScopeFailure(bead beads.Bead) bool {
+	if bead.Status != "closed" {
+		return false
+	}
+	if strings.TrimSpace(bead.Metadata[beadmeta.OnFailMetadataKey]) != "abort_scope" {
+		return false
+	}
+	if !beadOutcomeFailed(bead) {
+		return false
+	}
+	switch strings.TrimSpace(bead.Metadata[beadmeta.FailureClassMetadataKey]) {
+	case beadmeta.FailureClassTransient:
+		return false
+	case beadmeta.FailureClassHard:
+		return true
+	default:
+		return !isRetryAttemptSubject(bead)
+	}
 }

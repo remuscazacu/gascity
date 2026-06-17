@@ -110,8 +110,9 @@ func TestSessionDefaultNamedSession(t *testing.T) {
 		}
 		if !strings.Contains(out, string(session.StateCreating)) &&
 			!strings.Contains(out, string(session.StateActive)) &&
-			!strings.Contains(out, string(session.StateAwake)) {
-			t.Errorf("expected creating or running state in default named session list, got:\n%s", out)
+			!strings.Contains(out, string(session.StateAwake)) &&
+			!strings.Contains(out, string(session.StateAsleep)) {
+			t.Errorf("expected materialized default named session state in list, got:\n%s", out)
 		}
 	})
 
@@ -140,9 +141,9 @@ func TestSessionDefaultNamedSession(t *testing.T) {
 		}
 		for _, sess := range got.Sessions {
 			switch sess.State {
-			case session.StateCreating, session.StateActive, session.StateAwake:
+			case session.StateCreating, session.StateActive, session.StateAwake, session.StateAsleep:
 			default:
-				t.Errorf("session %q state = %q, want creating or running\n%s", sess.Template, sess.State, out)
+				t.Errorf("session %q state = %q, want materialized lifecycle state\n%s", sess.Template, sess.State, out)
 			}
 		}
 	})
