@@ -805,7 +805,25 @@ conflicting live workflow from the same source is an error.`,
 			printGraphV2Deprecations(stderr, inv.Deprecations)
 			cookVars = inv.Vars
 
-			result, err := molecule.Cook(cmd.Context(), store, args[0], scope.searchPaths, molecule.Options{
+			recipe, err := formula.CompileWithoutRuntimeVarValidation(cmd.Context(), args[0], scope.searchPaths, cookVars)
+			if err != nil {
+				return formulaCommandError(stderr, "gc formula cook", jsonOutput, err)
+			}
+			if err := molecule.ValidateRecipeRuntimeVars(recipe, molecule.Options{Title: title, Vars: cookVars}); err != nil {
+				return formulaCommandError(stderr, "gc formula cook", jsonOutput, err)
+			}
+			// sr-2cx: decorate graph.v2 recipes before instantiation so the control
+			// beads route to the control-dispatcher (which gives the reconciler the
+			// demand to wake it). molecule.Cook does compile+Instantiate with no
+			// decoration step, which left standalone-cooked graph.v2 molecules (e.g.
+			// the intake-poller's ticket-lifecycle) undecorated and undriveable.
+			if graphroute.IsCompiledGraphWorkflow(recipe) {
+				storeRef := workflowStoreRefForDir(scope.storeRoot, cityPath, loadedCityName(cfg, cityPath), cfg)
+				if err := decorateFormulaCookGraphV2Recipe(recipe, cookVars, storeRef, store, loadedCityName(cfg, cityPath), cityPath, cfg); err != nil {
+					return formulaCommandError(stderr, "gc formula cook", jsonOutput, fmt.Errorf("decorate formulas v2 recipe: %w", err))
+				}
+			}
+			result, err := molecule.Instantiate(cmd.Context(), store, recipe, molecule.Options{
 				Title: title,
 				Vars:  cookVars,
 			})
@@ -823,6 +841,12 @@ conflicting live workflow from the same source is an error.`,
 					return formulaCommandError(stderr, "gc formula cook", jsonOutput, err)
 				}
 			}
+
+			// sr-2cx: nudge the control-dispatcher to pick up the freshly-cooked
+			// molecule promptly (it also wakes from reconciler demand on the routed
+			// control bead; this just avoids waiting for the next tick), matching
+			// the attach-cook path.
+			_ = pokeControlDispatch(cityPath)
 
 			if jsonOutput {
 				return writeCLIJSONLineOrErr(stdout, stderr, "gc formula cook", formulaCookJSONResult{
