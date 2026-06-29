@@ -706,9 +706,20 @@ func doOrderRunWithJSON(aa []orders.Order, name, rig, cityPath string, store bea
 		}
 	}
 
+	// Decorate graph workflow recipes before instantiation so child step beads —
+	// and, critically, the control beads that drive the molecule — get
+	// gc.routed_to. This must run for EVERY graph.v2 molecule, not just pool
+	// orders: a non-pool order (whose formula routes steps via gc.run_target and
+	// whose order only supplies the trigger) still needs its control beads routed
+	// to the control-dispatcher, or the dispatcher never gets demand, never wakes,
+	// and the molecule never drives (sr-2cx). Mirrors dispatchWisp.
 	if a.Pool != "" && cfg != nil {
 		if err := applyGraphRouting(recipe, nil, pool, nil, "", "", "", store, cityName, cityPath, cfg); err != nil {
 			fmt.Fprintf(stderr, "gc order run: routing decoration failed: %v\n", err) //nolint:errcheck // best-effort stderr
+		}
+	} else if cfg != nil {
+		if err := decorateGraphWorkflowDefaultRoute(recipe, store, cityName, cityPath, cfg); err != nil {
+			fmt.Fprintf(stderr, "gc order run: graph routing decoration failed: %v\n", err) //nolint:errcheck // best-effort stderr
 		}
 	}
 
