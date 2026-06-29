@@ -75,6 +75,21 @@ func applyGraphRouting(recipe *formula.Recipe, a *config.Agent, routedTo string,
 	return graphroute.ApplyGraphRouting(recipe, a, routedTo, vars, "", scopeKind, scopeRef, storeRef, store, cityName, cfg, cliGraphrouteDeps(cityPath))
 }
 
+// decorateGraphWorkflowDefaultRoute decorates a compiled graph.v2 recipe with an
+// empty default route, for order/cook dispatch that supplies no pool. The root
+// stays an unrouted container, worker steps fall back to their own gc.run_target
+// binding, and the control beads (workflow-finalize, etc.) route to the
+// control-dispatcher. Routing the control beads is what gives the reconciler the
+// demand to wake the dispatcher; without it a non-pool graph.v2 molecule
+// instantiates undecorated and never drives (sr-2cx). No-ops for non-graph
+// recipes, preserving the legacy non-pool behavior.
+func decorateGraphWorkflowDefaultRoute(recipe *formula.Recipe, store beads.Store, cityName, cityPath string, cfg *config.City) error {
+	if !graphroute.IsCompiledGraphWorkflow(recipe) {
+		return nil
+	}
+	return graphroute.DecorateGraphWorkflowRecipe(recipe, graphroute.GraphWorkflowRouteVars(recipe, nil), "", "", "", "", "", "", store, cityName, cfg, cliGraphrouteDeps(cityPath))
+}
+
 var (
 	workflowServeList               = nextWorkflowServeBeads
 	controlDispatcherServe          = runControlDispatcherInStore

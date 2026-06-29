@@ -1426,13 +1426,25 @@ func (m *memoryOrderDispatcher) dispatchWisp(ctx context.Context, store beads.St
 		}
 	}
 
-	// Decorate graph workflow recipes with routing metadata so child step
-	// beads get gc.routed_to set before instantiation.
+	// Decorate graph workflow recipes with routing metadata BEFORE instantiation
+	// so child step beads — and, critically, the control beads that drive the
+	// molecule — get gc.routed_to set. This must run for EVERY graph.v2 molecule,
+	// not just pool orders: a non-pool order whose steps route via gc.run_target
+	// (the order "only supplies the trigger") still needs its control beads
+	// (workflow-finalize, etc.) routed to the control-dispatcher, or the
+	// dispatcher never gets demand, never wakes, and the molecule never drives
+	// (sr-2cx). Pool orders route the root + workers to the pool; non-pool orders
+	// decorate with an empty default route (root stays an unrouted container,
+	// workers fall back to their run_target binding, control beads -> dispatcher).
 	if a.Pool != "" {
 		if err := applyGraphRouting(recipe, nil, pool, nil, "", "", "", store, m.cityName, cityPath, m.cfg); err != nil {
 			logDispatchError(m.stderr, "gc: order %s: routing decoration failed: %v", scoped, err)
 			// Non-fatal — molecule still works, just without step-level routing.
 		}
+	} else if err := decorateGraphWorkflowDefaultRoute(recipe, store, m.cityName, cityPath, m.cfg); err != nil {
+		logDispatchError(m.stderr, "gc: order %s: graph routing decoration failed: %v", scoped, err)
+		// Non-fatal — molecule still instantiates; the control-dispatcher may not
+		// wake until a later re-route.
 	}
 
 	cookResult, err := molecule.Instantiate(ctx, store, recipe, molecule.Options{})
