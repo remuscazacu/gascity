@@ -11730,3 +11730,90 @@ func TestBuildDesiredStateRecordsDemandSubPhases(t *testing.T) {
 		}
 	}
 }
+
+// TestRealizePoolDesiredSessionsSkipsBenignNamedSessionSelfCollision is the
+// sr-wz8.1 guard: when a min=0/max=1 agent is ALSO declared as a configured
+// [[named_session]] for the same template, the canonical alias is permanently
+// reserved by that named session. Normalization can never succeed and is NOT a
+// conflict — the reconciler must skip it quietly rather than logging the
+// deferral + writing a pool_alias_conflict store update on every pass.
+func TestRealizePoolDesiredSessionsSkipsBenignNamedSessionSelfCollision(t *testing.T) {
+	cityPath := t.TempDir()
+	store := beads.NewMemStore()
+	// A singleton pool session bead under an ephemeral (slot) identity that the
+	// reconciler would normally normalize to the canonical template name. No
+	// separate bead holds the canonical alias — it is reserved purely by config,
+	// exactly as in production (log: "reserved for configured named session").
+	stale, err := store.Create(beads.Bead{
+		Title:  "cashmaster/refinery-1",
+		Type:   sessionBeadType,
+		Labels: []string{sessionBeadLabel, "agent:cashmaster/refinery-1", "template:cashmaster/refinery"},
+		Metadata: map[string]string{
+			"template":             "cashmaster/refinery",
+			"agent_name":           "cashmaster/refinery-1",
+			"alias":                "cashmaster/refinery-1",
+			"session_name":         "s-refinery-stale",
+			"state":                "awake",
+			poolManagedMetadataKey: boolMetadata(true),
+			"pool_slot":            "1",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.City{
+		Workspace: config.Workspace{Name: "test-city"},
+		Agents: []config.Agent{{
+			Name:              "refinery",
+			Dir:               "cashmaster",
+			StartCommand:      "true",
+			MaxActiveSessions: intPtr(1),
+		}},
+		// Same template declared ALSO as a named session — the self-collision.
+		NamedSessions: []config.NamedSession{{
+			Template: "refinery",
+			Dir:      "cashmaster",
+			Mode:     "on_demand",
+		}},
+	}
+	// Precondition: the config self-collision is detectable.
+	if !configHasNamedSessionForAgentTemplate(cfg, &cfg.Agents[0]) {
+		t.Fatal("test precondition failed: configHasNamedSessionForAgentTemplate should be true")
+	}
+
+	snapshot := &sessionBeadSnapshot{}
+	snapshot.add(stale)
+	var stderr bytes.Buffer
+	bp := newAgentBuildParams("test-city", cityPath, cfg, runtime.NewFake(), time.Now().UTC(), store, &stderr)
+	bp.sessionBeads = snapshot
+	desired := map[string]TemplateParams{}
+
+	realizePoolDesiredSessions(bp, &cfg.Agents[0], PoolDesiredState{
+		Template: "cashmaster/refinery",
+		Requests: []SessionRequest{{
+			Template:      "cashmaster/refinery",
+			Tier:          "resume",
+			SessionBeadID: stale.ID,
+		}},
+	}, desired, &stderr)
+
+	// The session is still realized (skip != drop).
+	if _, ok := desired[stale.Metadata["session_name"]]; !ok {
+		t.Fatalf("desired state missing session after benign skip; keys=%v stderr=%q", mapKeys(desired), stderr.String())
+	}
+	// No deferral spam.
+	if strings.Contains(stderr.String(), "deferring singleton pool identity normalization") {
+		t.Fatalf("benign self-collision must NOT log the deferral; stderr=%q", stderr.String())
+	}
+	// No per-pass conflict store write.
+	stored, err := store.Get(stale.ID)
+	if err != nil {
+		t.Fatalf("Get(%s): %v", stale.ID, err)
+	}
+	if got := stored.Metadata[poolAliasConflictCountMetadataKey]; got != "" {
+		t.Fatalf("benign self-collision wrote pool_alias_conflict_count=%q, want none (no per-pass churn)", got)
+	}
+	if got := stored.Metadata[poolAliasConflictMetadataKey]; got != "" {
+		t.Fatalf("benign self-collision wrote pool_alias_conflict=%q, want none", got)
+	}
+}
