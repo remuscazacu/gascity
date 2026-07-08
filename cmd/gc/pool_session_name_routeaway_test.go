@@ -258,3 +258,86 @@ func TestReleaseOrphanedPoolAssignments_ReleasesQualifiedRoutedAwayFromLiveSourc
 		t.Fatalf("assignee = %q, want empty", got.Assignee)
 	}
 }
+
+// TestReleaseOrphanedPoolAssignments_KeepsWhenTargetAgentOwnerSharesAliasHistoryIdentity
+// guards the over-release regression flagged in review: sessionBeadAssigneeIdentities
+// includes stale alias_history entries, so one identity string can be held by two live
+// sessions (one via alias_history, another as its current name — see
+// TestEnsureSessionNameAvailable_AllowsLiveAliasHistoryReuse). The route-away decision
+// must scan ALL matching sessions and preserve the bead when ANY store-scoped owner is
+// the routed-to agent — it must not release based on the first (wrong) match.
+func TestReleaseOrphanedPoolAssignments_KeepsWhenTargetAgentOwnerSharesAliasHistoryIdentity(t *testing.T) {
+	store := beads.NewMemStore()
+	// Session A (agent l1-support) holds "shared-id" ONLY in alias_history (renamed away).
+	// Listed first so a first-match resolver would wrongly pick it.
+	sessionA, err := store.Create(beads.Bead{
+		Title:  "l1 stale-history holder",
+		Type:   sessionBeadType,
+		Status: "open",
+		Metadata: map[string]string{
+			"session_name":         "l1-current",
+			"alias_history":        "shared-id",
+			"template":             "l1-support",
+			"agent_name":           "l1-support",
+			poolManagedMetadataKey: boolMetadata(true),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Create session A: %v", err)
+	}
+	// Session B (agent l2-erp, the routed-to target) currently holds "shared-id" and is
+	// legitimately working the bead.
+	sessionB, err := store.Create(beads.Bead{
+		Title:  "l2 current owner",
+		Type:   sessionBeadType,
+		Status: "open",
+		Metadata: map[string]string{
+			"session_name":         "shared-id",
+			"template":             "l2-erp",
+			"agent_name":           "l2-erp",
+			poolManagedMetadataKey: boolMetadata(true),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Create session B: %v", err)
+	}
+	work, err := store.Create(beads.Bead{
+		Title:    "l2's legitimately-owned work",
+		Assignee: "shared-id",
+		Metadata: map[string]string{"gc.routed_to": "l2-erp"},
+	})
+	if err != nil {
+		t.Fatalf("Create work bead: %v", err)
+	}
+	if err := store.Update(work.ID, beads.UpdateOpts{Status: stringPtr("in_progress")}); err != nil {
+		t.Fatalf("Set work status: %v", err)
+	}
+	work, err = store.Get(work.ID)
+	if err != nil {
+		t.Fatalf("Reload work bead: %v", err)
+	}
+
+	released := releaseOrphanedPoolAssignments(
+		store,
+		&config.City{Agents: []config.Agent{
+			{Name: "l1-support", MinActiveSessions: intPtr(0), MaxActiveSessions: intPtr(5)},
+			{Name: "l2-erp", MinActiveSessions: intPtr(0), MaxActiveSessions: intPtr(2)},
+		}},
+		"",
+		[]beads.Bead{sessionA, sessionB},
+		[]beads.Bead{work},
+		nil,
+		nil,
+		nil,
+	)
+	if len(released) != 0 {
+		t.Fatalf("released = %v, want none (l2-erp session B legitimately owns work routed to l2-erp; session A's stale alias_history match must not cause over-release)", released)
+	}
+	got, err := store.Get(work.ID)
+	if err != nil {
+		t.Fatalf("Get work bead: %v", err)
+	}
+	if got.Assignee != "shared-id" {
+		t.Fatalf("assignee = %q, want shared-id (must not release legitimately-owned work)", got.Assignee)
+	}
+}

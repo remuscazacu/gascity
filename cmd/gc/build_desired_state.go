@@ -1082,7 +1082,11 @@ func collectAssignedWorkBeadsWithStores(
 			// never sees them — pool demand stays at 0 and the workflow stalls
 			// (issue #2793). The release loop further gates each bead on
 			// openSessionOwnsWork / liveOpenSessionAssignmentExists, so
-			// live-session step beads in the same range are skipped untouched.
+			// live-session step beads in the same range are skipped untouched —
+			// EXCEPT a bead routed away to a different agent than its owning
+			// session's own agent (an L1->L2 escalation handoff), which
+			// assigneeRoutedAwayFromOwnAgent releases so the target pool wakes
+			// (sr-wz8.3).
 			if openRouted, err := listBothTiersForControllerDemand(source.store, beads.ListQuery{Status: "open"}); err == nil {
 				appendOpenRoutedWorkUnique(&result, &resultStores, &resultStoreRefs, openRouted, seen, source.store, source.ref)
 			} else {

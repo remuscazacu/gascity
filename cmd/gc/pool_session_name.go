@@ -147,25 +147,25 @@ func releaseOrphanedPoolAssignments(
 		if agentCfg == nil || !agentCfg.SupportsGenericEphemeralSessions() {
 			continue
 		}
+		workStoreRef := ""
+		if storeRefAware {
+			workStoreRef = assignedWorkStoreRefs[i]
+		}
 		if assignee == "" {
 			if wb.Status != "in_progress" {
 				continue
 			}
-		} else if !assigneeRoutedAwayFromOwnAgent(cfg, openSessionBeads, assignee, agentCfg.QualifiedName()) {
-			// sr-wz8.3: skip the release when a live session legitimately owns the
-			// assignee. These ownership guards exist for dead-session orphans. But
-			// when the bead has been routed AWAY to a different agent than the
-			// owning session's own agent (an L1->L2 escalation handoff), the owning
-			// session is the stale source, not the legitimate owner — so
-			// assigneeRoutedAwayFromOwnAgent bypasses these guards and lets the
-			// release proceed (the live-releasable + detached-probe checks below
-			// still gate the actual write). Without this, an escalated bead stays
-			// pinned to the live L1 source, starving the target pool of demand
-			// until the source session is closed.
-			workStoreRef := ""
-			if storeRefAware {
-				workStoreRef = assignedWorkStoreRefs[i]
-			}
+		} else if !assigneeRoutedAwayFromOwnAgent(cfg, cityPath, openSessionBeads, assignee, agentCfg.QualifiedName(), workStoreRef, storeRefAware) {
+			// sr-wz8.3: these guards PRESERVE a bead a live session legitimately
+			// owns (dead-session orphans fall through them naturally and get
+			// released). When the bead has been routed AWAY to a different agent
+			// than the owning session's own agent (an L1->L2 escalation handoff),
+			// the owning session is the stale source, not the legitimate owner —
+			// assigneeRoutedAwayFromOwnAgent detects that (store-ref-aware, over all
+			// owners, biased to preserve) and lets the release proceed. The
+			// live-releasable + detached-probe checks below still gate the actual
+			// write. Without this, an escalated bead stays pinned to the live source,
+			// starving the target pool of demand until the source session is closed.
 			if openSessionOwnsWork(legacyOpenIdentifiers, openIdentifiers, assignee, workStoreRef, storeRefAware) {
 				continue
 			}
@@ -206,43 +206,65 @@ func releaseOrphanedPoolAssignments(
 }
 
 // assigneeRoutedAwayFromOwnAgent reports whether an assigned work bead has been
-// routed to a DIFFERENT agent than the live open session that currently holds the
+// routed to a DIFFERENT agent than every live session that legitimately owns the
 // assignee — i.e. an escalation/handoff (sr-wz8.3: L1 slings the bead to
 // l2-<family> but it stays assigned to the live L1 session). Such an assignment
 // must be releasable even while the source session is open so the routed-to
 // target pool gains demand; otherwise the escalation deadlocks until the source
 // session is closed.
 //
-// Returns false (preserve the normal ownership guards) when no open session owns
-// the assignee — a dead-session orphan already handled by those guards — or when
-// the owning session's own agent IS the routed-to target (legitimate ownership,
-// e.g. a pool session working a bead routed to its own pool).
-func assigneeRoutedAwayFromOwnAgent(cfg *config.City, openSessionBeads []beads.Bead, assignee, routedTarget string) bool {
+// Ownership resolution mirrors openSessionOwnsWork and is deliberately biased to
+// PRESERVE (return false) — an over-release steals work a session is actively
+// doing, which is worse than a missed wake:
+//   - It scans ALL matching sessions, not just the first: one identity string can
+//     be held by two live sessions (via alias_history, or the same identity across
+//     rig stores), so a first-match resolver could pick the wrong one.
+//   - It is store-ref-aware: a matching session in a different store is not an
+//     owner of this bead (gastownhall/gascity#3621 / #1544). An unresolved
+//     store-ref is treated conservatively as reachable.
+//   - It concludes route-away only when there is at least one store-scoped owner
+//     AND every such owner resolves to a DIFFERENT agent than routedTarget. Any
+//     owner that IS the routed target, or whose agent cannot be resolved,
+//     preserves the bead.
+func assigneeRoutedAwayFromOwnAgent(cfg *config.City, cityPath string, openSessionBeads []beads.Bead, assignee, routedTarget, workStoreRef string, storeRefAware bool) bool {
 	assignee = strings.TrimSpace(assignee)
 	routedTarget = strings.TrimSpace(routedTarget)
-	if assignee == "" || routedTarget == "" {
+	if cfg == nil || assignee == "" || routedTarget == "" {
 		return false
 	}
+	ownerFound := false
 	for _, sb := range openSessionBeads {
 		if sb.Status == "closed" {
 			continue
 		}
-		owns := false
+		matched := false
 		for _, id := range sessionBeadAssigneeIdentities(sb) {
 			if strings.TrimSpace(id) == assignee {
-				owns = true
+				matched = true
 				break
 			}
 		}
-		if !owns {
+		if !matched {
 			continue
 		}
-		// The assignee resolves to this open session; it is a route-away only
-		// when the session's own agent differs from the bead's routed-to target.
-		ownAgent := normalizedSessionTemplate(sb, cfg)
-		return ownAgent != "" && ownAgent != routedTarget
+		// Store-ref scoping mirrors openSessionOwnsWork: a matching session only
+		// owns THIS bead when it is reachable in the bead's store. A resolved
+		// store-ref that differs means a different-store session — not an owner.
+		// An unresolved store-ref is treated conservatively as reachable.
+		if storeRefAware {
+			if ref, ok := assignedWorkStoreRefForSession(cityPath, cfg, sb); ok && ref != workStoreRef {
+				continue
+			}
+		}
+		// Resolve the owning session's own agent. If it cannot be resolved, or it
+		// IS the routed target, the bead is legitimately owned — never release.
+		ownerAgent := findAgentByTemplate(cfg, normalizedSessionTemplate(sb, cfg))
+		if ownerAgent == nil || ownerAgent.QualifiedName() == routedTarget {
+			return false
+		}
+		ownerFound = true
 	}
-	return false
+	return ownerFound
 }
 
 func detachedProbeAllowsOrphanRelease(wb beads.Bead) (bool, bool) {
