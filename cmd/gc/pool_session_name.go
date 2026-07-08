@@ -151,7 +151,17 @@ func releaseOrphanedPoolAssignments(
 			if wb.Status != "in_progress" {
 				continue
 			}
-		} else {
+		} else if !assigneeRoutedAwayFromOwnAgent(cfg, openSessionBeads, assignee, agentCfg.QualifiedName()) {
+			// sr-wz8.3: skip the release when a live session legitimately owns the
+			// assignee. These ownership guards exist for dead-session orphans. But
+			// when the bead has been routed AWAY to a different agent than the
+			// owning session's own agent (an L1->L2 escalation handoff), the owning
+			// session is the stale source, not the legitimate owner — so
+			// assigneeRoutedAwayFromOwnAgent bypasses these guards and lets the
+			// release proceed (the live-releasable + detached-probe checks below
+			// still gate the actual write). Without this, an escalated bead stays
+			// pinned to the live L1 source, starving the target pool of demand
+			// until the source session is closed.
 			workStoreRef := ""
 			if storeRefAware {
 				workStoreRef = assignedWorkStoreRefs[i]
@@ -193,6 +203,46 @@ func releaseOrphanedPoolAssignments(
 		released = append(released, releasedPoolAssignment{ID: wb.ID, Index: i})
 	}
 	return released
+}
+
+// assigneeRoutedAwayFromOwnAgent reports whether an assigned work bead has been
+// routed to a DIFFERENT agent than the live open session that currently holds the
+// assignee — i.e. an escalation/handoff (sr-wz8.3: L1 slings the bead to
+// l2-<family> but it stays assigned to the live L1 session). Such an assignment
+// must be releasable even while the source session is open so the routed-to
+// target pool gains demand; otherwise the escalation deadlocks until the source
+// session is closed.
+//
+// Returns false (preserve the normal ownership guards) when no open session owns
+// the assignee — a dead-session orphan already handled by those guards — or when
+// the owning session's own agent IS the routed-to target (legitimate ownership,
+// e.g. a pool session working a bead routed to its own pool).
+func assigneeRoutedAwayFromOwnAgent(cfg *config.City, openSessionBeads []beads.Bead, assignee, routedTarget string) bool {
+	assignee = strings.TrimSpace(assignee)
+	routedTarget = strings.TrimSpace(routedTarget)
+	if assignee == "" || routedTarget == "" {
+		return false
+	}
+	for _, sb := range openSessionBeads {
+		if sb.Status == "closed" {
+			continue
+		}
+		owns := false
+		for _, id := range sessionBeadAssigneeIdentities(sb) {
+			if strings.TrimSpace(id) == assignee {
+				owns = true
+				break
+			}
+		}
+		if !owns {
+			continue
+		}
+		// The assignee resolves to this open session; it is a route-away only
+		// when the session's own agent differs from the bead's routed-to target.
+		ownAgent := normalizedSessionTemplate(sb, cfg)
+		return ownAgent != "" && ownAgent != routedTarget
+	}
+	return false
 }
 
 func detachedProbeAllowsOrphanRelease(wb beads.Bead) (bool, bool) {
