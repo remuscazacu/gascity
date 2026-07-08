@@ -136,3 +136,125 @@ func TestReleaseOrphanedPoolAssignments_KeepsRoutedToOwnAgentLiveSession(t *test
 		t.Fatalf("assignee = %q, want l2-live (must not steal legitimately-owned work)", got.Assignee)
 	}
 }
+
+// qualifiedSupportAgents mirrors the real srv fleet naming: rig-scoped,
+// pack-bound agents whose QualifiedName() is the dotted "st/support.<name>"
+// form (Dir="st", BindingName="support"). The flat-name tests above cannot
+// catch a divergence between the routed-target lookup (findAgentByTemplate on
+// gc.routed_to) and the owning-session lookup (normalizedSessionTemplate on the
+// session bead's template metadata) under this production naming — these two
+// tests do (sr-wz8.3 guard #1: never over-release a legitimately-owned bead).
+func qualifiedSupportAgents() []config.Agent {
+	return []config.Agent{
+		{Name: "l1-support", Dir: "st", BindingName: "support", MinActiveSessions: intPtr(0), MaxActiveSessions: intPtr(5)},
+		{Name: "l2-erp", Dir: "st", BindingName: "support", MinActiveSessions: intPtr(0), MaxActiveSessions: intPtr(2)},
+	}
+}
+
+func TestReleaseOrphanedPoolAssignments_KeepsQualifiedOwnAgentLiveSession(t *testing.T) {
+	store := beads.NewMemStore()
+	session, err := store.Create(beads.Bead{
+		Title:  "l2 owner (qualified)",
+		Type:   sessionBeadType,
+		Status: "open",
+		Metadata: map[string]string{
+			"session_name":         "l2-erp-live",
+			"template":             "st/support.l2-erp",
+			"agent_name":           "st/support.l2-erp",
+			poolManagedMetadataKey: boolMetadata(true),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Create session bead: %v", err)
+	}
+	work, err := store.Create(beads.Bead{
+		Title:    "l2 in-progress work (qualified)",
+		Assignee: "l2-erp-live",
+		Metadata: map[string]string{"gc.routed_to": "st/support.l2-erp"},
+	})
+	if err != nil {
+		t.Fatalf("Create work bead: %v", err)
+	}
+	if err := store.Update(work.ID, beads.UpdateOpts{Status: stringPtr("in_progress")}); err != nil {
+		t.Fatalf("Set work status: %v", err)
+	}
+	work, err = store.Get(work.ID)
+	if err != nil {
+		t.Fatalf("Reload work bead: %v", err)
+	}
+
+	released := releaseOrphanedPoolAssignments(
+		store,
+		&config.City{Agents: qualifiedSupportAgents()},
+		"",
+		[]beads.Bead{session},
+		[]beads.Bead{work},
+		nil,
+		nil,
+		nil,
+	)
+	if len(released) != 0 {
+		t.Fatalf("released = %v, want none (live session owns work routed to its OWN qualified agent st/support.l2-erp — must not over-release)", released)
+	}
+	got, err := store.Get(work.ID)
+	if err != nil {
+		t.Fatalf("Get work bead: %v", err)
+	}
+	if got.Assignee != "l2-erp-live" {
+		t.Fatalf("assignee = %q, want l2-erp-live", got.Assignee)
+	}
+}
+
+func TestReleaseOrphanedPoolAssignments_ReleasesQualifiedRoutedAwayFromLiveSource(t *testing.T) {
+	store := beads.NewMemStore()
+	l1Session, err := store.Create(beads.Bead{
+		Title:  "l1 source (qualified)",
+		Type:   sessionBeadType,
+		Status: "open",
+		Metadata: map[string]string{
+			"session_name":         "l1-support-live",
+			"template":             "st/support.l1-support",
+			"agent_name":           "st/support.l1-support",
+			poolManagedMetadataKey: boolMetadata(true),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Create l1 session bead: %v", err)
+	}
+	work, err := store.Create(beads.Bead{
+		Title:    "escalated ticket (qualified)",
+		Assignee: "l1-support-live",
+		Metadata: map[string]string{"gc.routed_to": "st/support.l2-erp"},
+	})
+	if err != nil {
+		t.Fatalf("Create work bead: %v", err)
+	}
+	if err := store.Update(work.ID, beads.UpdateOpts{Status: stringPtr("in_progress")}); err != nil {
+		t.Fatalf("Set work status: %v", err)
+	}
+	work, err = store.Get(work.ID)
+	if err != nil {
+		t.Fatalf("Reload work bead: %v", err)
+	}
+
+	released := releaseOrphanedPoolAssignments(
+		store,
+		&config.City{Agents: qualifiedSupportAgents()},
+		"",
+		[]beads.Bead{l1Session},
+		[]beads.Bead{work},
+		nil,
+		nil,
+		nil,
+	)
+	if len(released) != 1 || released[0].ID != work.ID {
+		t.Fatalf("released = %v, want [%s] (bead routed away to st/support.l2-erp while assigned to live st/support.l1-support source must release)", released, work.ID)
+	}
+	got, err := store.Get(work.ID)
+	if err != nil {
+		t.Fatalf("Get work bead: %v", err)
+	}
+	if got.Assignee != "" {
+		t.Fatalf("assignee = %q, want empty", got.Assignee)
+	}
+}
