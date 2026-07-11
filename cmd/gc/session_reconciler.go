@@ -283,7 +283,14 @@ func drainAckAsyncStopKey(sessionID, name string) string {
 // for the async drain-ack stop path (see queueDrainAckAsyncStop).
 var drainAckAsyncStopPokeController = pokeController
 
-func queueDrainAckAsyncStop(cityPath string, store beads.Store, sp runtime.Provider, cfg *config.City, sessionID, name, expectedToken string, tracker *asyncStartTracker, stderr io.Writer) {
+// drainAckStopConfirmDeadTimeout/Poll bound the post-kill confirm-dead loop in
+// queueDrainAckAsyncStop. Package vars so tests can shrink them.
+var (
+	drainAckStopConfirmDeadTimeout = 6 * time.Second
+	drainAckStopConfirmDeadPoll    = 250 * time.Millisecond
+)
+
+func queueDrainAckAsyncStop(cityPath string, store beads.Store, sp runtime.Provider, cfg *config.City, sessionID, name, expectedToken string, processNames []string, tracker *asyncStartTracker, stderr io.Writer) {
 	name = strings.TrimSpace(name)
 	if name == "" || sp == nil {
 		return
@@ -327,11 +334,21 @@ func queueDrainAckAsyncStop(cityPath string, store beads.Store, sp runtime.Provi
 			fmt.Fprintf(stderr, "session reconciler: async drain-ack stop %s: %v\n", name, err) //nolint:errcheck
 			return
 		}
-		// The runtime session is now gone, but its pool session bead stays open
-		// (occupying the pool slot) until finalizeDrainAckStopPendingSessions
-		// closes it on a subsequent tick. Poke the controller so finalize +
-		// pool respawn runs on the next event-driven tick instead of waiting up
-		// to a full patrol interval (ga-ryhnhd). Mirrors the drain-ack CLI poke.
+		// The kill above is best-effort and does not verify the agent actually
+		// exited: a claude that ignores SIGHUP, reparents, or races the kill
+		// grace period can survive it. Re-observe liveness and re-issue the kill
+		// until the runtime is confirmed dead or a bounded deadline passes — a
+		// survivor here would otherwise keep occupying the pool slot forever
+		// (the reassigned next step stays runtime-missing). Mirrors #4089's
+		// confirm-dead contract.
+		confirmDrainAckRuntimeDead(cityPath, store, sp, cfg, name, processNames, stderr)
+		// The runtime session is now confirmed dead (or the confirm-dead
+		// deadline passed and we proceed best-effort), but its pool session
+		// bead stays open (occupying the pool slot) until
+		// finalizeDrainAckStopPendingSessions closes it on a subsequent tick.
+		// Poke the controller so finalize + pool respawn runs on the next
+		// event-driven tick instead of waiting up to a full patrol interval
+		// (ga-ryhnhd). Mirrors the drain-ack CLI poke.
 		// Poke is best-effort: a failure is not logged because the goroutine may
 		// outlive its reconcile invocation and write to stderr concurrently with
 		// the caller's subsequent writes on the same writer (data race on
@@ -339,6 +356,30 @@ func queueDrainAckAsyncStop(cityPath string, store beads.Store, sp runtime.Provi
 		// patrol tick regardless.
 		_ = poke(cityPath)
 	}()
+}
+
+// confirmDrainAckRuntimeDead re-observes a killed runtime and re-issues the
+// kill until liveness is false or the deadline passes. The async drain-ack
+// stop's kill is best-effort and does not verify the agent exited; a survivor
+// keeps the pool slot occupied so the reassigned next step stays
+// runtime-missing. Returns true if confirmed dead, false if it outlived the
+// deadline (caller proceeds best-effort). Mirrors #4089's confirm-dead contract.
+func confirmDrainAckRuntimeDead(cityPath string, store beads.Store, sp runtime.Provider, cfg *config.City, name string, processNames []string, stderr io.Writer) bool {
+	deadline := time.Now().Add(drainAckStopConfirmDeadTimeout)
+	for {
+		running, alive := observeRuntimeProviderLiveness(sp, name, processNames)
+		if !running && !alive {
+			return true
+		}
+		if !time.Now().Before(deadline) {
+			fmt.Fprintf(stderr, "session reconciler: async drain-ack stop %s: runtime still alive after confirm-dead deadline; slot may stay occupied\n", name) //nolint:errcheck
+			return false
+		}
+		if err := workerKillSessionTargetWithConfig(cityPath, store, sp, cfg, name); err != nil && !runtime.IsSessionGone(err) {
+			fmt.Fprintf(stderr, "session reconciler: async drain-ack stop %s re-kill: %v\n", name, err) //nolint:errcheck
+		}
+		time.Sleep(drainAckStopConfirmDeadPoll)
+	}
 }
 
 func recordDrainAckAssignedWorkEvent(
@@ -597,7 +638,7 @@ func reconcileDrainAckStopPending(
 		// mutates only the async tracker, so the bead is untouched and the snapshot
 		// stays coherent — a zero result (applyTo no-op) matches the old refresh of
 		// the unmutated bead.
-		queueDrainAckAsyncStop(cityPath, store, sp, cfg, session.ID, name, session.Metadata["instance_token"], asyncStopTracker, stderr)
+		queueDrainAckAsyncStop(cityPath, store, sp, cfg, session.ID, name, session.Metadata["instance_token"], tp.Hints.ProcessNames, asyncStopTracker, stderr)
 		return true, drainAckFinalizeResult{}
 	}
 	return true, finalizeDrainAckStoppedSession(
@@ -640,7 +681,7 @@ func finalizeDrainAckStopPendingSessions(
 		name := strings.TrimSpace(info.SessionNameMetadata)
 		obs, err := workerObserveSessionTargetWithRuntimeHintsWithConfig(cityPath, store, sp, cfg, session.ID, nil)
 		if err != nil || obs.Running || obs.Alive {
-			queueDrainAckAsyncStop(cityPath, store, sp, cfg, session.ID, name, session.Metadata["instance_token"], asyncStopTracker, stderr)
+			queueDrainAckAsyncStop(cityPath, store, sp, cfg, session.ID, name, session.Metadata["instance_token"], nil, asyncStopTracker, stderr)
 			continue
 		}
 		// Pool-managed stop-pending beads close here instead of staying open as
@@ -1977,7 +2018,7 @@ func reconcileSessionBeadsTracedWithNamedDemand(
 								// reader. Pre-pass-masked (STEP6-PREPASS-AUDIT group 3).
 								tick.apply(session.ID, sessionpkg.DrainAckStopPendingPatch(clk.Now().UTC()))
 								clearDrainTrackerForStopPending(session, dt)
-								queueDrainAckAsyncStop(cityPath, store, sp, cfg, session.ID, name, session.Metadata["instance_token"], asyncStopTracker, stderr)
+								queueDrainAckAsyncStop(cityPath, store, sp, cfg, session.ID, name, session.Metadata["instance_token"], tp.Hints.ProcessNames, asyncStopTracker, stderr)
 								if trace != nil {
 									trace.RecordDecision(TraceSiteReconcilerDrainAck, TraceReasonOrphaned, TraceOutcomeStopPending, template, name, nil)
 								}
@@ -2363,7 +2404,7 @@ func reconcileSessionBeadsTracedWithNamedDemand(
 							// orphan-arm site above (STEP6-PREPASS-AUDIT group 3).
 							tick.apply(session.ID, sessionpkg.DrainAckStopPendingPatch(clk.Now().UTC()))
 							clearDrainTrackerForStopPending(session, dt)
-							queueDrainAckAsyncStop(cityPath, store, sp, cfg, session.ID, name, session.Metadata["instance_token"], asyncStopTracker, stderr)
+							queueDrainAckAsyncStop(cityPath, store, sp, cfg, session.ID, name, session.Metadata["instance_token"], tp.Hints.ProcessNames, asyncStopTracker, stderr)
 							if trace != nil {
 								trace.RecordDecision(TraceSiteReconcilerDrainAck, TraceReasonAcknowledged, TraceOutcomeStopPending, tp.TemplateName, name, nil)
 							}
