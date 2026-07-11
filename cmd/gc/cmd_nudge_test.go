@@ -3078,7 +3078,7 @@ func TestCmdNudgePollSleepsAfterSuccessfulDelivery(t *testing.T) {
 
 	deliverCalls := 0
 	origDeliver := deliverQueuedNudgesByPoller
-	deliverQueuedNudgesByPoller = func(nudgeTarget, beads.Store, runtime.Provider, time.Duration, worker.LiveObservation) (bool, error) {
+	deliverQueuedNudgesByPoller = func(nudgeTarget, beads.Store, beads.Store, runtime.Provider, time.Duration, worker.LiveObservation) (bool, error) {
 		deliverCalls++
 		return true, nil
 	}
