@@ -1250,32 +1250,37 @@ func (s *NativeDoltStore) Ready(queries ...ReadyQuery) ([]Bead, error) {
 		var beads []Bead
 		seen := make(map[string]bool)
 		now := time.Now().UTC()
-	statusLoop:
-		for _, status := range nativeDoltOpenReadyStatuses {
-			filter := beadslib.WorkFilter{Status: status}
-			if q.TierMode == TierBoth || q.TierMode == TierWisps {
-				filter.IncludeEphemeral = true
-			}
-			if q.Assignee != "" {
-				filter.Assignee = &q.Assignee
-			}
-			issues, err := storage.GetReadyWork(ctx, filter)
+		// One GetReadyWork call covers every open-class backing status via
+		// WorkFilter.Statuses. The previous one-call-per-status loop re-paid
+		// the deferred-parents pre-query, the wisp arm, and the transaction
+		// round trips seven times per Ready() (sr-5rz: ~30-70ms per call on
+		// a live server-mode store). The backing Limit stays 0 because the
+		// gc-side post-filter below (tier, excluded types/labels, defer)
+		// discards rows the store cannot, so a server-side limit could
+		// under-fill the result.
+		filter := beadslib.WorkFilter{Statuses: nativeDoltOpenReadyStatuses}
+		if q.TierMode == TierBoth || q.TierMode == TierWisps {
+			filter.IncludeEphemeral = true
+		}
+		if q.Assignee != "" {
+			filter.Assignee = &q.Assignee
+		}
+		issues, err := storage.GetReadyWork(ctx, filter)
+		if err != nil {
+			return err
+		}
+		for _, issue := range issues {
+			bead, err := beadFromNativeIssue(issue)
 			if err != nil {
 				return err
 			}
-			for _, issue := range issues {
-				bead, err := beadFromNativeIssue(issue)
-				if err != nil {
-					return err
-				}
-				if !IsReadyCandidateForTier(bead, now, q.TierMode) || seen[bead.ID] {
-					continue
-				}
-				seen[bead.ID] = true
-				beads = append(beads, bead)
-				if q.Limit > 0 && len(beads) >= q.Limit {
-					break statusLoop
-				}
+			if !IsReadyCandidateForTier(bead, now, q.TierMode) || seen[bead.ID] {
+				continue
+			}
+			seen[bead.ID] = true
+			beads = append(beads, bead)
+			if q.Limit > 0 && len(beads) >= q.Limit {
+				break
 			}
 		}
 		out = beads

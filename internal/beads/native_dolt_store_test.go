@@ -353,9 +353,20 @@ func TestNativeDoltStoreReadyOnlyIncludesOpenAndDeferredUpstreamStatuses(t *test
 	}
 	storage := &nativeDoltStorageSpy{
 		getReadyWork: func(_ context.Context, filter beadslib.WorkFilter) ([]*beadslib.Issue, error) {
+			match := func(status beadslib.Status) bool {
+				if filter.Status != "" {
+					return status == filter.Status
+				}
+				for _, s := range filter.Statuses {
+					if status == s {
+						return true
+					}
+				}
+				return false
+			}
 			var result []*beadslib.Issue
 			for _, issue := range issues {
-				if issue.Status != filter.Status {
+				if !match(issue.Status) {
 					continue
 				}
 				result = append(result, cloneNativeIssueForTest(issue))
