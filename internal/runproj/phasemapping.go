@@ -34,13 +34,11 @@ type phaseMapping struct {
 
 // mapRunPhase classifies a run group into a phase. Port of TS mapRunPhase.
 func mapRunPhase(issues []runIssue) phaseMapping {
-	// Status-based branches first — authoritative.
-	for _, i := range issues {
-		if i.status == "blocked" || strings.Contains(textForIssue(i), "blocked") {
-			return phaseMapping{phase: "blocked", label: "blocked"}
-		}
-	}
-
+	// A fully-closed run is complete — this wins over every other signal, and
+	// must be checked BEFORE the blocked branch. A closed step's text can
+	// mention the word "blocked" (e.g. the review-quorum verdict enum
+	// "pass, pass_with_findings, fail, or blocked"); that must never bucket a
+	// finished run under "blocked".
 	if len(issues) > 0 {
 		allClosed := true
 		for _, i := range issues {
@@ -51,6 +49,17 @@ func mapRunPhase(issues []runIssue) phaseMapping {
 		}
 		if allClosed {
 			return phaseMapping{phase: "complete", label: "complete"}
+		}
+	}
+
+	// Blocked is keyed on the authoritative bd status only — NOT a substring
+	// scan of step text. The former strings.Contains(textForIssue(i), "blocked")
+	// heuristic false-flagged whole runs whenever any step's title/description
+	// merely mentioned the word (verdict enums, prompts, instructions), splitting
+	// completed and mid-review runs into the "blocked" bucket.
+	for _, i := range issues {
+		if i.status == "blocked" {
+			return phaseMapping{phase: "blocked", label: "blocked"}
 		}
 	}
 
