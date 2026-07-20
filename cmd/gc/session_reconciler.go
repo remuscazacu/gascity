@@ -2429,6 +2429,16 @@ func reconcileSessionBeadsTracedWithNamedDemand(
 						}
 					}
 				}
+				// The deterministic control-dispatcher legitimately shows a frozen
+				// last_activity: its `gc convoy control --serve` loop discards stdout,
+				// so a healthy dispatcher produces no pane I/O while polling. Its
+				// liveness is the trace log, not pane activity — recycling it here
+				// would churn a healthy singleton every interval. Exempt it.
+				if !exempt && cfg != nil {
+					if cfgAgent := findAgentByTemplate(cfg, tp.TemplateName); cfgAgent != nil && config.IsDeterministicControlDispatcher(cfgAgent) {
+						exempt = true
+					}
+				}
 				holdsClaim := false
 				if !exempt {
 					has, err := sessionHasInProgressAssignedWorkForConfig(store, rigStores, infoByID[id], cfg)
