@@ -65,9 +65,18 @@ func mapRunPhase(rootID string, issues []runIssue) phaseMapping {
 		}
 	}
 
-	// Status-based blocked branch — authoritative for open runs.
+	// Status-based blocked branch — keyed on the authoritative bd status only,
+	// NOT a substring scan of step text. The former
+	// strings.Contains(textForIssue(i), "blocked") heuristic false-flagged a whole
+	// run whenever any step's title/description merely mentioned the word (verdict
+	// enums, prompts, instructions). Hoisting the terminal check above this branch
+	// fixed only the fully-closed case; an OPEN run still mislabels, which is what
+	// mol-review-quorum hits — its review step description lists "pass,
+	// pass_with_findings, fail, or blocked" as the verdict enum, so every
+	// mid-review quorum run lands in the blocked lane with a claim-a-worker remedy
+	// that can do nothing. textForIssue is retained for the "review" keyword path.
 	for _, i := range issues {
-		if i.status == "blocked" || strings.Contains(textForIssue(i), "blocked") {
+		if i.status == "blocked" {
 			return phaseMapping{phase: "blocked", label: "blocked"}
 		}
 	}
