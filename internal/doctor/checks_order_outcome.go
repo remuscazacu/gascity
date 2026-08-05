@@ -16,6 +16,10 @@ import (
 const (
 	orderOutcomeHealthyName = "order-outcome-healthy"
 
+	// orderOutcomeInspectHintFmt mirrors the sibling check's
+	// orderFiringInspectHintFmt so the pair emits consistently-shaped hints.
+	orderOutcomeInspectHintFmt = "Inspect with: gc order check && gc order history %s"
+
 	// orderOutcomeFailureThreshold is the consecutive-failure count that flags an
 	// order. Three, not two: two in a row is a plausible transient for anything
 	// touching the network or a lock. Three, not five: on a 6h order five failures
@@ -62,11 +66,13 @@ func nearControllerStart(ts time.Time, starts []time.Time, grace time.Duration) 
 //
 // sawOutcome distinguishes "ran and succeeded" from "never produced an outcome";
 // order-firing-current already owns the never-fired case.
-func consecutiveOrderFailures(outcomes []events.Event, subject string, starts []time.Time, grace time.Duration) (int, string, bool) {
-	streak := 0
-	lastMessage := ""
+//
+// skipped counts trailing failures that were inside the post-start grace
+// window and therefore excluded from streak. Callers need this to avoid
+// reporting "last run succeeded" when every trailing run actually failed but
+// was suppressed as a spurious post-restart burst — see classifyOrderOutcome.
+func consecutiveOrderFailures(outcomes []events.Event, subject string, starts []time.Time, grace time.Duration) (streak int, lastMessage string, sawOutcome bool, skipped int) {
 	lastMessageSet := false
-	sawOutcome := false
 
 	for i := len(outcomes) - 1; i >= 0; i-- {
 		event := outcomes[i]
@@ -78,6 +84,7 @@ func consecutiveOrderFailures(outcomes []events.Event, subject string, starts []
 			break
 		}
 		if nearControllerStart(event.Ts, starts, grace) {
+			skipped++
 			continue
 		}
 		streak++
@@ -87,7 +94,7 @@ func consecutiveOrderFailures(outcomes []events.Event, subject string, starts []
 		}
 	}
 
-	return streak, lastMessage, sawOutcome
+	return streak, lastMessage, sawOutcome, skipped
 }
 
 // classifyOrderOutcome turns one order's failure streak into a doctor result.
@@ -95,13 +102,22 @@ func consecutiveOrderFailures(outcomes []events.Event, subject string, starts []
 // Always SeverityAdvisory. Blocking would fail gc doctor outright and gate every
 // clean-doctor dependency on transient order breakage, including during
 // maintenance — see the design doc's severity rationale.
-func classifyOrderOutcome(order orders.Order, streak int, threshold int, lastMessage string, sawOutcome bool) (CheckStatus, CheckSeverity, string) {
+//
+// skipped is the grace-window-skipped-failure count from consecutiveOrderFailures.
+// When streak == 0 but skipped > 0, every trailing run actually failed (just
+// inside the post-start grace window); reporting "last run succeeded" would be
+// a false statement in the diagnostic tool at exactly the moment an operator is
+// most likely reading it — just after a restart.
+func classifyOrderOutcome(order orders.Order, streak int, threshold int, lastMessage string, sawOutcome bool, skipped int) (CheckStatus, CheckSeverity, string) {
 	name := orderDisplayName(order)
 
 	if !sawOutcome {
 		return StatusOK, SeverityAdvisory, fmt.Sprintf("%s: no completed runs yet", name)
 	}
 	if streak == 0 {
+		if skipped > 0 {
+			return StatusOK, SeverityAdvisory, fmt.Sprintf("%s: %d recent failure(s) within controller-start grace window", name, skipped)
+		}
 		return StatusOK, SeverityAdvisory, fmt.Sprintf("%s: last run succeeded", name)
 	}
 	if streak < threshold {
@@ -196,7 +212,7 @@ func (c *OrderOutcomeHealthyCheck) Run(ctx *CheckContext) *CheckResult {
 	worst := StatusOK
 	monitored := 0
 	failing := 0
-	var firstFailing string
+	var firstFailingHint string
 	suspendedRigs := orderFiringCurrentSuspendedRigs(c.cfg)
 
 	for _, order := range allOrders {
@@ -211,14 +227,20 @@ func (c *OrderOutcomeHealthyCheck) Run(ctx *CheckContext) *CheckResult {
 		}
 		monitored++
 
-		streak, lastMessage, sawOutcome := consecutiveOrderFailures(outcomes, order.ScopedName(), starts, c.grace)
-		status, _, detail := classifyOrderOutcome(order, streak, c.threshold, lastMessage, sawOutcome)
+		streak, lastMessage, sawOutcome, skipped := consecutiveOrderFailures(outcomes, order.ScopedName(), starts, c.grace)
+		status, severity, detail := classifyOrderOutcome(order, streak, c.threshold, lastMessage, sawOutcome, skipped)
+		result.Severity = severity
 		worst = worseStatus(worst, status)
 		result.Details = append(result.Details, detail)
 		if status != StatusOK {
 			failing++
-			if firstFailing == "" {
-				firstFailing = order.ScopedName()
+			if firstFailingHint == "" {
+				// gc order history takes a bare name positionally and filters
+				// on a.Name; the scoped form matches zero orders on the
+				// local-iterator path used when the supervisor API is
+				// unavailable — exactly when someone is debugging a broken
+				// city. orderHistoryHintTarget yields the --rig form instead.
+				firstFailingHint = orderHistoryHintTarget(order)
 			}
 		}
 	}
@@ -234,7 +256,7 @@ func (c *OrderOutcomeHealthyCheck) Run(ctx *CheckContext) *CheckResult {
 		result.Message = "all scheduled orders succeeding"
 	} else {
 		result.Message = fmt.Sprintf("%d order(s) failing repeatedly", failing)
-		result.FixHint = fmt.Sprintf("Inspect with: gc order history %s", firstFailing)
+		result.FixHint = fmt.Sprintf(orderOutcomeInspectHintFmt, firstFailingHint)
 	}
 	return result
 }
