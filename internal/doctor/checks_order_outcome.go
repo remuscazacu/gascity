@@ -2,9 +2,13 @@ package doctor
 
 import (
 	"fmt"
+	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
+	"github.com/gastownhall/gascity/internal/citylayout"
+	"github.com/gastownhall/gascity/internal/config"
 	"github.com/gastownhall/gascity/internal/events"
 	"github.com/gastownhall/gascity/internal/orders"
 )
@@ -109,4 +113,163 @@ func classifyOrderOutcome(order orders.Order, streak int, threshold int, lastMes
 		detail = fmt.Sprintf("%s, last %q", detail, lastMessage)
 	}
 	return StatusWarning, SeverityAdvisory, detail
+}
+
+// OrderOutcomeHealthyCheck reports scheduled orders failing repeatedly.
+//
+// Sibling to OrderFiringCurrentCheck, which answers "did it run?" while this
+// answers "did it succeed?". During the 3-day sr-f73w incident order-firing-current
+// stayed green: the order fired faithfully every 6h and failed every time.
+type OrderOutcomeHealthyCheck struct {
+	cfg       *config.City
+	cityPath  string
+	threshold int
+	grace     time.Duration
+}
+
+// NewOrderOutcomeHealthyCheck creates the repeated-order-failure check.
+func NewOrderOutcomeHealthyCheck(cfg *config.City, cityPath string) *OrderOutcomeHealthyCheck {
+	return &OrderOutcomeHealthyCheck{
+		cfg:       cfg,
+		cityPath:  cityPath,
+		threshold: orderOutcomeFailureThreshold,
+		grace:     orderOutcomeStartGrace,
+	}
+}
+
+// Name returns the check identifier shown by gc doctor.
+func (c *OrderOutcomeHealthyCheck) Name() string { return orderOutcomeHealthyName }
+
+// CanFix reports whether the check can repair a failing order. It cannot:
+// remediation depends entirely on why the order fails.
+func (c *OrderOutcomeHealthyCheck) CanFix() bool { return false }
+
+// Fix is a no-op for the reason given on CanFix.
+func (c *OrderOutcomeHealthyCheck) Fix(_ *CheckContext) error { return nil }
+
+// Run counts each scheduled order's trailing consecutive failures.
+//
+// Unlike order-firing-current this needs no goroutine-plus-timeout guard: that
+// check wraps its work because the order-history resolver opens the beads/Dolt
+// store without accepting a context. This one reads only the event log.
+func (c *OrderOutcomeHealthyCheck) Run(ctx *CheckContext) *CheckResult {
+	result := &CheckResult{Name: c.Name(), Severity: SeverityAdvisory}
+	if c.cfg == nil {
+		result.Status = StatusOK
+		result.Message = "no city config loaded"
+		return result
+	}
+
+	cityPath := c.cityPath
+	if cityPath == "" && ctx != nil {
+		cityPath = ctx.CityPath
+	}
+	if cityPath == "" {
+		result.Status = StatusError
+		result.Message = "city path unavailable"
+		return result
+	}
+
+	// Same helper order-firing-current uses, so the two checks can never
+	// disagree about which orders are in scope.
+	allOrders, err := scanOrderFiringCurrentOrders(cityPath, c.cfg)
+	if err != nil {
+		result.Status = StatusError
+		result.Message = fmt.Sprintf("scan orders: %v", err)
+		return result
+	}
+
+	eventPath := filepath.Join(cityPath, citylayout.RuntimeRoot, "events.jsonl")
+	outcomes, err := readOrderOutcomeEvents(eventPath)
+	if err != nil {
+		result.Status = StatusError
+		result.Message = fmt.Sprintf("read order outcome events: %v", err)
+		return result
+	}
+	starts, err := controllerStartTimes(eventPath)
+	if err != nil {
+		result.Status = StatusError
+		result.Message = fmt.Sprintf("read controller start events: %v", err)
+		return result
+	}
+
+	worst := StatusOK
+	monitored := 0
+	failing := 0
+	var firstFailing string
+	suspendedRigs := orderFiringCurrentSuspendedRigs(c.cfg)
+
+	for _, order := range allOrders {
+		// Manual and event-triggered orders are out of scope by construction:
+		// ticket-intake sat at a permanent streak of 20 from 2026-06-17 purely
+		// because it was switched to trigger="manual".
+		if order.Trigger != "cron" && order.Trigger != "cooldown" {
+			continue
+		}
+		if orderFiringCurrentOrderSuspended(suspendedRigs, order) {
+			continue
+		}
+		monitored++
+
+		streak, lastMessage, sawOutcome := consecutiveOrderFailures(outcomes, order.ScopedName(), starts, c.grace)
+		status, _, detail := classifyOrderOutcome(order, streak, c.threshold, lastMessage, sawOutcome)
+		worst = worseStatus(worst, status)
+		result.Details = append(result.Details, detail)
+		if status != StatusOK {
+			failing++
+			if firstFailing == "" {
+				firstFailing = order.ScopedName()
+			}
+		}
+	}
+
+	if monitored == 0 {
+		result.Status = StatusOK
+		result.Message = "no cron or cooldown orders"
+		return result
+	}
+
+	result.Status = worst
+	if worst == StatusOK {
+		result.Message = "all scheduled orders succeeding"
+	} else {
+		result.Message = fmt.Sprintf("%d order(s) failing repeatedly", failing)
+		result.FixHint = fmt.Sprintf("Inspect with: gc order history %s", firstFailing)
+	}
+	return result
+}
+
+// readOrderOutcomeEvents returns order.completed and order.failed merged in Seq
+// order. events.Filter matches a single Type, hence two reads.
+func readOrderOutcomeEvents(eventPath string) ([]events.Event, error) {
+	completed, err := events.ReadFiltered(eventPath, events.Filter{Type: events.OrderCompleted})
+	if err != nil {
+		return nil, err
+	}
+	failed, err := events.ReadFiltered(eventPath, events.Filter{Type: events.OrderFailed})
+	if err != nil {
+		return nil, err
+	}
+	merged := make([]events.Event, 0, len(completed)+len(failed))
+	merged = append(merged, completed...)
+	merged = append(merged, failed...)
+	// Seq, not Ts: the log is append-only and seq-ordered, and two events in the
+	// same second would otherwise sort arbitrarily.
+	sort.Slice(merged, func(i, j int) bool { return merged[i].Seq < merged[j].Seq })
+	return merged, nil
+}
+
+// controllerStartTimes returns every controller.started timestamp. The sibling
+// check's latestControllerStartedAt returns only the newest, which is not enough
+// here — see nearControllerStart.
+func controllerStartTimes(eventPath string) ([]time.Time, error) {
+	startEvents, err := events.ReadFiltered(eventPath, events.Filter{Type: events.ControllerStarted})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]time.Time, 0, len(startEvents))
+	for _, event := range startEvents {
+		out = append(out, event.Ts)
+	}
+	return out, nil
 }

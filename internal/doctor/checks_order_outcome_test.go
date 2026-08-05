@@ -1,10 +1,13 @@
 package doctor
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/gastownhall/gascity/internal/config"
 	"github.com/gastownhall/gascity/internal/events"
 	"github.com/gastownhall/gascity/internal/orders"
 )
@@ -308,5 +311,63 @@ func TestClassifyOrderOutcomeOmitsEmptyMessage(t *testing.T) {
 
 	if strings.Contains(detail, `""`) {
 		t.Fatalf("detail = %q, want no empty-quote artifact when the message is blank", detail)
+	}
+}
+
+func TestOrderOutcomeHealthySkipsManualOrders(t *testing.T) {
+	cityDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(cityDir, "city.toml"), []byte("[workspace]\nname = \"demo\"\n"), 0o644); err != nil {
+		t.Fatalf("write city.toml: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(cityDir, "orders"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// One scheduled, one manual. Only the scheduled one may appear in details:
+	// ticket-intake sat at a permanent streak of 20 from 2026-06-17 purely
+	// because it was switched to trigger="manual".
+	if err := os.WriteFile(filepath.Join(cityDir, "orders", "scheduled-order.toml"),
+		[]byte("[order]\nexec = \"true\"\ntrigger = \"cooldown\"\ninterval = \"5m\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cityDir, "orders", "manual-order.toml"),
+		[]byte("[order]\nexec = \"true\"\ntrigger = \"manual\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := &config.City{Workspace: config.Workspace{Name: "demo"}}
+	result := NewOrderOutcomeHealthyCheck(cfg, cityDir).Run(&CheckContext{CityPath: cityDir})
+
+	if result.Severity != SeverityAdvisory {
+		t.Fatalf("severity = %v, want SeverityAdvisory", result.Severity)
+	}
+	joined := strings.Join(result.Details, "\n")
+	if !strings.Contains(joined, "scheduled-order") {
+		t.Fatalf("scheduled order missing from details:\n%s", joined)
+	}
+	if strings.Contains(joined, "manual-order") {
+		t.Fatalf("manual order must be out of scope by construction:\n%s", joined)
+	}
+}
+
+func TestOrderOutcomeHealthyReportsCleanCity(t *testing.T) {
+	cityDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(cityDir, "city.toml"), []byte("[workspace]\nname = \"demo\"\n"), 0o644); err != nil {
+		t.Fatalf("write city.toml: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(cityDir, "orders"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cityDir, "orders", "scheduled-order.toml"),
+		[]byte("[order]\nexec = \"true\"\ntrigger = \"cooldown\"\ninterval = \"5m\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := &config.City{Workspace: config.Workspace{Name: "demo"}}
+	// No events.jsonl at all: a missing log must read as "nothing to report",
+	// not as an error, or a fresh city fails doctor on its first run.
+	result := NewOrderOutcomeHealthyCheck(cfg, cityDir).Run(&CheckContext{CityPath: cityDir})
+
+	if result.Status != StatusOK {
+		t.Fatalf("status = %v (%s), want StatusOK on a city with no event log", result.Status, result.Message)
 	}
 }
