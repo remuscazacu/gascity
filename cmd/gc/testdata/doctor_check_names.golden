@@ -35,6 +35,7 @@ instructions-file
 service-secrets-perms
 skill-collision
 order-firing-current
+order-outcome-healthy
 codex-hooks-drift
 rig-pack-coverage
 pack-runtimes
