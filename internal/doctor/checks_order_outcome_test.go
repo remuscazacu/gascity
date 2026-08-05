@@ -268,13 +268,10 @@ func TestNearControllerStartWithNoStarts(t *testing.T) {
 func TestClassifyOrderOutcomeFlagsAtThreshold(t *testing.T) {
 	order := orders.Order{Name: "refresh-family-clones", Rig: "st"}
 
-	status, severity, detail := classifyOrderOutcome(order, 3, 3, "exit status 128", true, 0)
+	status, detail := classifyOrderOutcome(order, 3, 3, "exit status 128", true, 0)
 
 	if status != StatusWarning {
 		t.Fatalf("status = %v, want StatusWarning", status)
-	}
-	if severity != SeverityAdvisory {
-		t.Fatalf("severity = %v, want SeverityAdvisory — this check must never gate doctor", severity)
 	}
 	if !strings.Contains(detail, "3 consecutive failures") {
 		t.Fatalf("detail = %q, want it to state the streak", detail)
@@ -287,13 +284,10 @@ func TestClassifyOrderOutcomeFlagsAtThreshold(t *testing.T) {
 func TestClassifyOrderOutcomeAllowsUnderThreshold(t *testing.T) {
 	order := orders.Order{Name: "dolt-remotes-patrol"}
 
-	status, severity, detail := classifyOrderOutcome(order, 2, 3, "exit status 1", true, 0)
+	status, detail := classifyOrderOutcome(order, 2, 3, "exit status 1", true, 0)
 
 	if status != StatusOK {
 		t.Fatalf("status = %v, want StatusOK for a streak under threshold", status)
-	}
-	if severity != SeverityAdvisory {
-		t.Fatalf("severity = %v, want SeverityAdvisory", severity)
 	}
 	if !strings.Contains(detail, "2 consecutive") {
 		t.Fatalf("detail = %q, want it to report the sub-threshold streak", detail)
@@ -303,7 +297,7 @@ func TestClassifyOrderOutcomeAllowsUnderThreshold(t *testing.T) {
 func TestClassifyOrderOutcomeHealthyOrder(t *testing.T) {
 	order := orders.Order{Name: "gate-sweep"}
 
-	status, _, detail := classifyOrderOutcome(order, 0, 3, "", true, 0)
+	status, detail := classifyOrderOutcome(order, 0, 3, "", true, 0)
 
 	if status != StatusOK {
 		t.Fatalf("status = %v, want StatusOK", status)
@@ -316,7 +310,7 @@ func TestClassifyOrderOutcomeHealthyOrder(t *testing.T) {
 func TestClassifyOrderOutcomeNoOutcomesYet(t *testing.T) {
 	order := orders.Order{Name: "brand-new-order"}
 
-	status, _, detail := classifyOrderOutcome(order, 0, 3, "", false, 0)
+	status, detail := classifyOrderOutcome(order, 0, 3, "", false, 0)
 
 	if status != StatusOK {
 		t.Fatalf("status = %v, want StatusOK — order-firing-current owns the never-fired case", status)
@@ -329,7 +323,7 @@ func TestClassifyOrderOutcomeNoOutcomesYet(t *testing.T) {
 func TestClassifyOrderOutcomeOmitsEmptyMessage(t *testing.T) {
 	order := orders.Order{Name: "some-order"}
 
-	_, _, detail := classifyOrderOutcome(order, 3, 3, "", true, 0)
+	_, detail := classifyOrderOutcome(order, 3, 3, "", true, 0)
 
 	if strings.Contains(detail, `""`) {
 		t.Fatalf("detail = %q, want no empty-quote artifact when the message is blank", detail)
@@ -344,13 +338,10 @@ func TestClassifyOrderOutcomeReportsGraceWindowSkipsInsteadOfSuccess(t *testing.
 	// after a restart.
 	order := orders.Order{Name: "dolt-health"}
 
-	status, severity, detail := classifyOrderOutcome(order, 0, 3, "", true, 10)
+	status, detail := classifyOrderOutcome(order, 0, 3, "", true, 10)
 
 	if status != StatusOK {
 		t.Fatalf("status = %v, want StatusOK — this suppresses the alarm as intended", status)
-	}
-	if severity != SeverityAdvisory {
-		t.Fatalf("severity = %v, want SeverityAdvisory", severity)
 	}
 	if strings.Contains(detail, "last run succeeded") {
 		t.Fatalf("detail = %q, must not claim success when every trailing run actually failed", detail)

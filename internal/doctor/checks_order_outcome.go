@@ -99,36 +99,32 @@ func consecutiveOrderFailures(outcomes []events.Event, subject string, starts []
 
 // classifyOrderOutcome turns one order's failure streak into a doctor result.
 //
-// Always SeverityAdvisory. Blocking would fail gc doctor outright and gate every
-// clean-doctor dependency on transient order breakage, including during
-// maintenance — see the design doc's severity rationale.
-//
 // skipped is the grace-window-skipped-failure count from consecutiveOrderFailures.
 // When streak == 0 but skipped > 0, every trailing run actually failed (just
 // inside the post-start grace window); reporting "last run succeeded" would be
 // a false statement in the diagnostic tool at exactly the moment an operator is
 // most likely reading it — just after a restart.
-func classifyOrderOutcome(order orders.Order, streak int, threshold int, lastMessage string, sawOutcome bool, skipped int) (CheckStatus, CheckSeverity, string) {
+func classifyOrderOutcome(order orders.Order, streak int, threshold int, lastMessage string, sawOutcome bool, skipped int) (CheckStatus, string) {
 	name := orderDisplayName(order)
 
 	if !sawOutcome {
-		return StatusOK, SeverityAdvisory, fmt.Sprintf("%s: no completed runs yet", name)
+		return StatusOK, fmt.Sprintf("%s: no completed runs yet", name)
 	}
 	if streak == 0 {
 		if skipped > 0 {
-			return StatusOK, SeverityAdvisory, fmt.Sprintf("%s: %d recent failure(s) within controller-start grace window", name, skipped)
+			return StatusOK, fmt.Sprintf("%s: %d recent failure(s) within controller-start grace window", name, skipped)
 		}
-		return StatusOK, SeverityAdvisory, fmt.Sprintf("%s: last run succeeded", name)
+		return StatusOK, fmt.Sprintf("%s: last run succeeded", name)
 	}
 	if streak < threshold {
-		return StatusOK, SeverityAdvisory, fmt.Sprintf("%s: %d consecutive failure(s), under threshold %d", name, streak, threshold)
+		return StatusOK, fmt.Sprintf("%s: %d consecutive failure(s), under threshold %d", name, streak, threshold)
 	}
 
 	detail := fmt.Sprintf("%s: %d consecutive failures", name, streak)
 	if strings.TrimSpace(lastMessage) != "" {
 		detail = fmt.Sprintf("%s, last %q", detail, lastMessage)
 	}
-	return StatusWarning, SeverityAdvisory, detail
+	return StatusWarning, detail
 }
 
 // OrderOutcomeHealthyCheck reports scheduled orders failing repeatedly.
@@ -169,6 +165,10 @@ func (c *OrderOutcomeHealthyCheck) Fix(_ *CheckContext) error { return nil }
 // check wraps its work because the order-history resolver opens the beads/Dolt
 // store without accepting a context. This one reads only the event log.
 func (c *OrderOutcomeHealthyCheck) Run(ctx *CheckContext) *CheckResult {
+	// This check is advisory on every path: a failing order must not gate gc doctor.
+	// Blocking would fail gc doctor outright and gate every clean-doctor dependency
+	// on transient order breakage, including during maintenance. SeverityAdvisory
+	// is the only source of truth, set here at construction.
 	result := &CheckResult{Name: c.Name(), Severity: SeverityAdvisory}
 	if c.cfg == nil {
 		result.Status = StatusOK
@@ -228,8 +228,7 @@ func (c *OrderOutcomeHealthyCheck) Run(ctx *CheckContext) *CheckResult {
 		monitored++
 
 		streak, lastMessage, sawOutcome, skipped := consecutiveOrderFailures(outcomes, order.ScopedName(), starts, c.grace)
-		status, severity, detail := classifyOrderOutcome(order, streak, c.threshold, lastMessage, sawOutcome, skipped)
-		result.Severity = severity
+		status, detail := classifyOrderOutcome(order, streak, c.threshold, lastMessage, sawOutcome, skipped)
 		worst = worseStatus(worst, status)
 		result.Details = append(result.Details, detail)
 		if status != StatusOK {
