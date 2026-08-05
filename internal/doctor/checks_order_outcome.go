@@ -1,9 +1,12 @@
 package doctor
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/gastownhall/gascity/internal/events"
+	"github.com/gastownhall/gascity/internal/orders"
 )
 
 const (
@@ -81,4 +84,29 @@ func consecutiveOrderFailures(outcomes []events.Event, subject string, starts []
 	}
 
 	return streak, lastMessage, sawOutcome
+}
+
+// classifyOrderOutcome turns one order's failure streak into a doctor result.
+//
+// Always SeverityAdvisory. Blocking would fail gc doctor outright and gate every
+// clean-doctor dependency on transient order breakage, including during
+// maintenance — see the design doc's severity rationale.
+func classifyOrderOutcome(order orders.Order, streak int, threshold int, lastMessage string, sawOutcome bool) (CheckStatus, CheckSeverity, string) {
+	name := orderDisplayName(order)
+
+	if !sawOutcome {
+		return StatusOK, SeverityAdvisory, fmt.Sprintf("%s: no completed runs yet", name)
+	}
+	if streak == 0 {
+		return StatusOK, SeverityAdvisory, fmt.Sprintf("%s: last run succeeded", name)
+	}
+	if streak < threshold {
+		return StatusOK, SeverityAdvisory, fmt.Sprintf("%s: %d consecutive failure(s), under threshold %d", name, streak, threshold)
+	}
+
+	detail := fmt.Sprintf("%s: %d consecutive failures", name, streak)
+	if strings.TrimSpace(lastMessage) != "" {
+		detail = fmt.Sprintf("%s, last %q", detail, lastMessage)
+	}
+	return StatusWarning, SeverityAdvisory, detail
 }

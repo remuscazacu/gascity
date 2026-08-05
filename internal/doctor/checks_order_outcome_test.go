@@ -1,10 +1,12 @@
 package doctor
 
 import (
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/gastownhall/gascity/internal/events"
+	"github.com/gastownhall/gascity/internal/orders"
 )
 
 // outcomeEvent builds one order.completed / order.failed event. seq is what the
@@ -235,5 +237,76 @@ func TestNearControllerStartWithNoStarts(t *testing.T) {
 	ts := time.Date(2026, 8, 4, 23, 0, 0, 0, time.UTC)
 	if nearControllerStart(ts, nil, 10*time.Minute) {
 		t.Fatal("nearControllerStart = true with no starts, want false")
+	}
+}
+
+func TestClassifyOrderOutcomeFlagsAtThreshold(t *testing.T) {
+	order := orders.Order{Name: "refresh-family-clones", Rig: "st"}
+
+	status, severity, detail := classifyOrderOutcome(order, 3, 3, "exit status 128", true)
+
+	if status != StatusWarning {
+		t.Fatalf("status = %v, want StatusWarning", status)
+	}
+	if severity != SeverityAdvisory {
+		t.Fatalf("severity = %v, want SeverityAdvisory — this check must never gate doctor", severity)
+	}
+	if !strings.Contains(detail, "3 consecutive failures") {
+		t.Fatalf("detail = %q, want it to state the streak", detail)
+	}
+	if !strings.Contains(detail, "exit status 128") {
+		t.Fatalf("detail = %q, want it to carry the last failure message", detail)
+	}
+}
+
+func TestClassifyOrderOutcomeAllowsUnderThreshold(t *testing.T) {
+	order := orders.Order{Name: "dolt-remotes-patrol"}
+
+	status, severity, detail := classifyOrderOutcome(order, 2, 3, "exit status 1", true)
+
+	if status != StatusOK {
+		t.Fatalf("status = %v, want StatusOK for a streak under threshold", status)
+	}
+	if severity != SeverityAdvisory {
+		t.Fatalf("severity = %v, want SeverityAdvisory", severity)
+	}
+	if !strings.Contains(detail, "2 consecutive") {
+		t.Fatalf("detail = %q, want it to report the sub-threshold streak", detail)
+	}
+}
+
+func TestClassifyOrderOutcomeHealthyOrder(t *testing.T) {
+	order := orders.Order{Name: "gate-sweep"}
+
+	status, _, detail := classifyOrderOutcome(order, 0, 3, "", true)
+
+	if status != StatusOK {
+		t.Fatalf("status = %v, want StatusOK", status)
+	}
+	if !strings.Contains(detail, "last run succeeded") {
+		t.Fatalf("detail = %q, want it to say the last run succeeded", detail)
+	}
+}
+
+func TestClassifyOrderOutcomeNoOutcomesYet(t *testing.T) {
+	order := orders.Order{Name: "brand-new-order"}
+
+	status, _, detail := classifyOrderOutcome(order, 0, 3, "", false)
+
+	if status != StatusOK {
+		t.Fatalf("status = %v, want StatusOK — order-firing-current owns the never-fired case", status)
+	}
+	if !strings.Contains(detail, "no completed runs yet") {
+		t.Fatalf("detail = %q, want it to distinguish never-ran from succeeded", detail)
+	}
+}
+
+func TestClassifyOrderOutcomeOmitsEmptyMessage(t *testing.T) {
+	order := orders.Order{Name: "some-order"}
+
+	_, _, detail := classifyOrderOutcome(order, 3, 3, "", true)
+
+	if strings.Contains(detail, `""`) {
+		t.Fatalf("detail = %q, want no empty-quote artifact when the message is blank", detail)
 	}
 }
