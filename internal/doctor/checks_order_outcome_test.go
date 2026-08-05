@@ -92,10 +92,13 @@ func TestConsecutiveOrderFailuresSkipsPostStartBurst(t *testing.T) {
 			start.Add(time.Duration(i+1)*30*time.Second), "gc: unknown command \"dolt\""))
 	}
 
-	streak, _, _ := consecutiveOrderFailures(outcomes, "dolt-health", []time.Time{start}, 10*time.Minute)
+	streak, _, sawOutcome := consecutiveOrderFailures(outcomes, "dolt-health", []time.Time{start}, 10*time.Minute)
 
 	if streak != 0 {
 		t.Fatalf("streak = %d, want 0 — every failure is inside the grace window", streak)
+	}
+	if !sawOutcome {
+		t.Fatal("sawOutcome = false, want true")
 	}
 }
 
@@ -162,6 +165,45 @@ func TestConsecutiveOrderFailuresUndercountsAcrossGraceWindow(t *testing.T) {
 
 	if streak != 26 {
 		t.Fatalf("streak = %d, want 26 (27 failures, one skipped inside the grace window, run not broken)", streak)
+	}
+}
+
+func TestConsecutiveOrderFailuresStopsAtSuccessInsideGraceWindow(t *testing.T) {
+	// A success is proof the order works and ends the streak, even inside the
+	// grace window. Skipping it would let the walk run past onto stale failures
+	// from before the success — the exact false positive this check prevents.
+	start := time.Date(2026, 8, 4, 23, 23, 0, 0, time.UTC)
+	outcomes := []events.Event{
+		outcomeEvent(1, "probe-order", events.OrderFailed, start.Add(-100*time.Hour), "exit status 1"),
+		outcomeEvent(2, "probe-order", events.OrderFailed, start.Add(-99*time.Hour), "exit status 1"),
+		outcomeEvent(3, "probe-order", events.OrderFailed, start.Add(-98*time.Hour), "exit status 1"),
+		outcomeEvent(4, "probe-order", events.OrderCompleted, start.Add(2*time.Minute), ""),
+	}
+
+	streak, _, sawOutcome := consecutiveOrderFailures(outcomes, "probe-order", []time.Time{start}, 10*time.Minute)
+
+	if streak != 0 {
+		t.Fatalf("streak = %d, want 0 — the success inside the grace window must end the walk", streak)
+	}
+	if !sawOutcome {
+		t.Fatal("sawOutcome = false, want true")
+	}
+}
+
+func TestConsecutiveOrderFailuresPrefersNewestMessageEvenWhenEmpty(t *testing.T) {
+	base := time.Date(2026, 8, 3, 0, 0, 0, 0, time.UTC)
+	outcomes := []events.Event{
+		outcomeEvent(1, "probe-order", events.OrderFailed, base, "real reason"),
+		outcomeEvent(2, "probe-order", events.OrderFailed, base.Add(time.Hour), ""),
+	}
+
+	streak, lastMessage, _ := consecutiveOrderFailures(outcomes, "probe-order", nil, 10*time.Minute)
+
+	if streak != 2 {
+		t.Fatalf("streak = %d, want 2", streak)
+	}
+	if lastMessage != "" {
+		t.Fatalf("lastMessage = %q, want \"\" — the newest failure's message wins even when empty", lastMessage)
 	}
 }
 

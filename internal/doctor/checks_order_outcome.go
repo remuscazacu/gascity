@@ -45,6 +45,10 @@ func nearControllerStart(ts time.Time, starts []time.Time, grace time.Duration) 
 // outcomes must hold order.completed and order.failed events ordered by Seq
 // ascending; the walk runs newest-first and stops at the first success.
 //
+// A success always ends the streak, even if it falls within the post-start grace
+// window. The grace window skips only spurious FAILURES (neither counting them nor
+// allowing them to break the streak); a success is proof the order works.
+//
 // Failures inside the post-start grace window are SKIPPED, not reset. Resetting
 // would let a frequently-restarting city zero a genuinely broken order's streak
 // on every restart, which is the opposite of what this check is for.
@@ -54,6 +58,7 @@ func nearControllerStart(ts time.Time, starts []time.Time, grace time.Duration) 
 func consecutiveOrderFailures(outcomes []events.Event, subject string, starts []time.Time, grace time.Duration) (int, string, bool) {
 	streak := 0
 	lastMessage := ""
+	lastMessageSet := false
 	sawOutcome := false
 
 	for i := len(outcomes) - 1; i >= 0; i-- {
@@ -62,15 +67,16 @@ func consecutiveOrderFailures(outcomes []events.Event, subject string, starts []
 			continue
 		}
 		sawOutcome = true
-		if nearControllerStart(event.Ts, starts, grace) {
-			continue
-		}
 		if event.Type != events.OrderFailed {
 			break
 		}
+		if nearControllerStart(event.Ts, starts, grace) {
+			continue
+		}
 		streak++
-		if lastMessage == "" {
+		if !lastMessageSet {
 			lastMessage = event.Message
+			lastMessageSet = true
 		}
 	}
 
