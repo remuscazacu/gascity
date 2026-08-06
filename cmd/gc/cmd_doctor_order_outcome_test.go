@@ -13,7 +13,13 @@ func TestBuildDoctorChecksRegistersOrderOutcomeHealthy(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(cityDir, "city.toml"), []byte("[workspace]\nname = \"demo\"\n"), 0o644); err != nil {
 		t.Fatalf("write city.toml: %v", err)
 	}
-	t.Setenv("GC_DOLT", "skip")
+	// No GC_DOLT=skip here on purpose. The Dolt-touching checks this assertion
+	// must not depend on are suppressed through buildDoctorChecksOpts below,
+	// and cfg carries no rigs, so the only gcDoltSkip() reads inside
+	// buildDoctorChecks (the per-rig Dolt server/ops registrations) are
+	// unreachable. Setting the process environment would add a counted call to
+	// the untagged Small cmd/gc environment ledger, whose invariant forbids
+	// growth (TESTING.md, CHECKED TEST RESOURCE LEDGER; sr-qppw).
 	cfg := &config.City{Workspace: config.Workspace{Name: "demo"}}
 
 	names := doctorCheckNames(buildDoctorChecks(cityDir, cfg, nil, buildDoctorChecksOpts{
