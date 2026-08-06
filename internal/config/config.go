@@ -1919,6 +1919,16 @@ type DoltConfig struct {
 	// WriteTimeoutMillis overrides the managed Dolt listener write_timeout_millis.
 	// 0 means use the managed default.
 	WriteTimeoutMillis int `toml:"write_timeout_millis,omitempty" jsonschema:"default=300000"`
+	// WaitTimeoutSeconds overrides the managed server's wait_timeout system
+	// variable, which is how long Dolt keeps an idle connection before reaping
+	// it. Cities that raise ReadTimeoutMillis above the reconcile tick gap
+	// generally need this raised with it, or the controller's long-lived
+	// dispatch-pool connections are still reaped between ticks. Before this
+	// field existed the only way to set it was GC_DOLT_WAIT_TIMEOUT in the
+	// supervisor's process environment, which no city.toml could express and
+	// no shell-invoked restart inherited — so a restart from an operator shell
+	// silently rewrote the value. 0 (omitted) means use the managed default.
+	WaitTimeoutSeconds int `toml:"wait_timeout_seconds,omitempty" jsonschema:"default=30"`
 	// DoltLockReleaseTimeout is how long managed-dolt lifecycle operations
 	// wait for dolt's on-disk exclusive store locks (the root-level
 	// `<data_dir>/.dolt/noms/LOCK` and per-database
@@ -1989,6 +1999,19 @@ func (d DoltConfig) EffectiveWriteTimeoutMillis() int {
 		return d.WriteTimeoutMillis
 	}
 	return DefaultDoltWriteTimeoutMillis
+}
+
+// DefaultDoltWaitTimeoutSeconds is the managed server's idle-connection reap
+// window when no value is configured.
+const DefaultDoltWaitTimeoutSeconds = 30
+
+// EffectiveWaitTimeoutSeconds returns the configured managed wait_timeout,
+// defaulting omitted or non-positive values to DefaultDoltWaitTimeoutSeconds.
+func (d DoltConfig) EffectiveWaitTimeoutSeconds() int {
+	if d.WaitTimeoutSeconds > 0 {
+		return d.WaitTimeoutSeconds
+	}
+	return DefaultDoltWaitTimeoutSeconds
 }
 
 // DefaultDoltLockReleaseTimeout is the wait window for dolt's on-disk

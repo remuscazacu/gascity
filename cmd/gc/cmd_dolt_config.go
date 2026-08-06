@@ -179,7 +179,7 @@ func writeManagedDoltConfigFile(path, host, port, dataDir, logLevel string, dolt
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("create config dir: %w", err)
 	}
-	waitTimeout := managedDoltWaitTimeout()
+	waitTimeout := managedDoltWaitTimeoutForConfig(doltConfig, os.Getenv)
 	waitTimeoutLine := ""
 	if waitTimeout > 0 {
 		waitTimeoutLine = fmt.Sprintf("  wait_timeout: %q\n", strconv.Itoa(waitTimeout))
@@ -239,9 +239,32 @@ system_variables:
 	return nil
 }
 
+// managedDoltWaitTimeoutForConfig resolves the managed wait_timeout with
+// city.toml winning over the ambient GC_DOLT_WAIT_TIMEOUT, matching how every
+// other [dolt] field resolves. The env path is kept as the fallback because it
+// carries an escape hatch city.toml cannot express: a negative value suppresses
+// the wait_timeout line entirely, whereas an omitted or zero config field means
+// "use the managed default".
+func managedDoltWaitTimeoutForConfig(doltConfig config.DoltConfig, getenv func(string) string) int {
+	if doltConfig.WaitTimeoutSeconds > 0 {
+		return doltConfig.WaitTimeoutSeconds
+	}
+	return managedDoltWaitTimeoutFromEnv(getenv)
+}
+
 func managedDoltWaitTimeout() int {
+	return managedDoltWaitTimeoutFromEnv(os.Getenv)
+}
+
+// managedDoltWaitTimeoutFromEnv takes its lookup as a parameter so the
+// resolution order can be tested without mutating the process environment,
+// which the cmd/gc environment debt ratchet forbids growing (see TESTING.md).
+func managedDoltWaitTimeoutFromEnv(getenv func(string) string) int {
 	const defaultWaitTimeout = 30
-	raw := os.Getenv("GC_DOLT_WAIT_TIMEOUT")
+	if getenv == nil {
+		return defaultWaitTimeout
+	}
+	raw := getenv("GC_DOLT_WAIT_TIMEOUT")
 	if raw == "" {
 		return defaultWaitTimeout
 	}
