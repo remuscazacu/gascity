@@ -2172,6 +2172,10 @@ export type OrderRunOutputBody = {
 };
 
 export type OrderSuppressedPayload = {
+    blocker_age_ms?: number;
+    blocker_id?: string;
+    blocker_kind?: string;
+    blocker_title?: string;
     consecutive: number;
     first_suppressed: string;
     order_name: string;
