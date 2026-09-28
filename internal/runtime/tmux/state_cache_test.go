@@ -896,3 +896,43 @@ func TestProcessAliveWrappedPane(t *testing.T) {
 		t.Fatal("processAlive = false for systemd-run pane with claude child, want true (descendant fallback)")
 	}
 }
+
+// A launcher that execs into the provider REPLACES the pane process instead of
+// parenting it, so the pane PID is the provider and has no children at all. The
+// shell branch searched descendants only, so it read a healthy session as dead.
+// Measured on srvcity 2026-09-28: pane_current_command=bash with ps comm=claude
+// on one constant PID, no children, for the whole life of the session.
+func TestProcessAlive_ShellPaneExecdIntoProvider(t *testing.T) {
+	snapshot := newProcessSnapshot([]processRuntimeState{
+		{PID: "200", PPID: "1", Command: "claude", Args: "claude --dangerously-skip-permissions"},
+	})
+	pane := paneRuntimeState{Command: "bash", PID: "200"}
+	if !pane.processAlive(processNameSet([]string{"claude"}), snapshot) {
+		t.Fatal("processAlive = false for a shell pane that exec'd into claude, want true")
+	}
+}
+
+// `mise x claude -- claude ...` is the same runner shape the argv scan already
+// knows ("x" is in runnerSubcommands), but mise was missing from
+// knownInterpreters, so the provider name in argv was never reached.
+func TestProcessAlive_MiseRunnerPaneMatchesProvider(t *testing.T) {
+	snapshot := newProcessSnapshot([]processRuntimeState{
+		{PID: "300", PPID: "1", Command: "mise", Args: "mise x claude -- claude --dangerously-skip-permissions"},
+	})
+	pane := paneRuntimeState{Command: "mise", PID: "300"}
+	if !pane.processAlive(processNameSet([]string{"claude"}), snapshot) {
+		t.Fatal("processAlive = false for a mise runner pane hosting claude, want true")
+	}
+}
+
+// The pair that needs both fixes together: tmux still reports the shell while ps
+// has already caught the mise runner phase on the same exec'd PID.
+func TestProcessAlive_ShellPaneExecdIntoMiseRunner(t *testing.T) {
+	snapshot := newProcessSnapshot([]processRuntimeState{
+		{PID: "400", PPID: "1", Command: "mise", Args: "mise x claude -- claude --dangerously-skip-permissions"},
+	})
+	pane := paneRuntimeState{Command: "bash", PID: "400"}
+	if !pane.processAlive(processNameSet([]string{"claude"}), snapshot) {
+		t.Fatal("processAlive = false for a shell pane that exec'd into the mise runner, want true")
+	}
+}
