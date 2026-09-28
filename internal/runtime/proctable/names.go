@@ -97,7 +97,7 @@ func ProcessMatchesNameSet(command, args string, names map[string]struct{}) bool
 }
 
 var knownInterpreters = map[string]struct{}{
-	"node": {}, "bun": {}, "npx": {}, "deno": {},
+	"node": {}, "bun": {}, "npx": {}, "deno": {}, "mise": {},
 }
 
 var runnerSubcommands = map[string]struct{}{
