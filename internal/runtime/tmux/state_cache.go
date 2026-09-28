@@ -453,9 +453,12 @@ func (p paneRuntimeState) processAlive(names map[string]struct{}, processes proc
 	if p.PID == "" {
 		return false
 	}
-	if isSupportedShell(p.Command) {
-		return processes.hasDescendantWithNames(p.PID, names, 0)
-	}
+	// The pane's own process is checked first for every pane, shell or not. A
+	// launcher that execs into the provider (`exec mise x claude -- claude …`)
+	// REPLACES the pane process rather than parenting it, so the pane PID is the
+	// provider and has no descendants at all. Searching only descendants — which
+	// this branch used to do whenever tmux reported a shell — read such a session
+	// as dead and the reconciler reaped it as a "zombie process" on a loop.
 	if processes.processMatchesNames(p.PID, names) {
 		return true
 	}
@@ -518,7 +521,7 @@ func processMatchesNameSet(command, args string, names map[string]struct{}) bool
 }
 
 var knownInterpreters = map[string]struct{}{
-	"node": {}, "bun": {}, "npx": {}, "deno": {},
+	"node": {}, "bun": {}, "npx": {}, "deno": {}, "mise": {},
 }
 
 var runnerSubcommands = map[string]struct{}{
@@ -526,15 +529,6 @@ var runnerSubcommands = map[string]struct{}{
 }
 
 const maxProcessDescendantDepth = 10
-
-func isSupportedShell(command string) bool {
-	for _, shell := range supportedShells {
-		if command == shell {
-			return true
-		}
-	}
-	return false
-}
 
 func newProcessSnapshot(processes []processRuntimeState) processSnapshot {
 	snapshot := processSnapshot{
