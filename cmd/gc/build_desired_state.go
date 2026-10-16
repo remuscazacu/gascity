@@ -252,6 +252,7 @@ var (
 	errPoolSessionCreateBudgetExhausted = errors.New("pool session create budget exhausted")
 	errPoolSessionCreatePartial         = errors.New("pool session create skipped: demand read partial")
 	errPoolSessionCreateProviderRed     = errors.New("pool session create skipped: provider red")
+	errPoolSessionCreateProviderLimited = errors.New("pool session create skipped: provider on a usage limit")
 )
 
 // poolSessionCreateFairShareCounter rotates scarce create tokens across
@@ -808,6 +809,7 @@ func buildDesiredStateWithSessionBeadsAtOpts(
 		// A seat parked on pre-assigned blocked work stays desired but takes
 		// no cap headroom (ga-ylpbsy.16). A partial work read parks nothing.
 		parked := parkSeatsForDemand(cfg, [][]session.Info{sessionBeads.OpenInfos()}, assignedWorkBeads, assignedWorkStoreRefs, readyAssigned, storePartial, poolDecisionTime.UTC())
+		bp.providerLimitHolds = providerLimitHolds(sessionBeads.OpenInfos(), poolDecisionTime)
 		poolDesiredStates := computePoolDesiredStatesParkedAt(
 			cfg,
 			poolWorkBeads,
@@ -4198,6 +4200,13 @@ func realizePoolDesiredSessionsAt(
 				case errors.Is(err, errPoolSessionCreateProviderRed):
 					// debug-level: fires every tick during a red episode; not operator noise
 					fmt.Fprintf(stderr, "buildDesiredState: pool %q request: %v (provider red, fresh create blocked)\n", qualifiedName, err) //nolint:errcheck
+				case errors.Is(err, errPoolSessionCreateProviderLimited):
+					// Fires every tick for the hours a limit lasts; the held
+					// sessions already log the episode once and the API reports
+					// them rate_limited.
+					if gcDebugEnabled() {
+						fmt.Fprintf(stderr, "buildDesiredState: pool %q request: %v (fresh create blocked until the reset)\n", qualifiedName, err) //nolint:errcheck
+					}
 				case errors.Is(err, errPoolSessionNameUnavailable):
 					// The slot's runtime name is a function of its identity, so
 					// it cannot be worked around by minting another one — that
@@ -5659,6 +5668,13 @@ func planFreshPoolSessionBead(bp *agentBuildParams, cfgAgent *config.Agent, temp
 	if healthy, present := bp.providerHealthSnapshot.check(provName); present && !healthy {
 		delete(usedSlots, slot)
 		return nil, errPoolSessionCreateProviderRed
+	}
+	// Usage-limit gate (sr-olfu): a fresh seat for a provider whose sessions
+	// are parked on a usage limit would start straight into the same wall.
+	// The deterministic control-dispatcher runs gc, not the provider.
+	if until, held := bp.providerLimitHolds[provName]; held && until.After(bp.decisionTime) && !config.IsDeterministicControlDispatcher(cfgAgent) {
+		delete(usedSlots, slot)
+		return nil, errPoolSessionCreateProviderLimited
 	}
 
 	if !bp.tryClaimPoolSessionCreate(template) {

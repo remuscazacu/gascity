@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gastownhall/gascity/internal/clock"
+	"github.com/gastownhall/gascity/internal/config"
 	"github.com/gastownhall/gascity/internal/runtime"
 	sessionpkg "github.com/gastownhall/gascity/internal/session"
 )
@@ -81,6 +82,60 @@ func providerLimitWritten(info, next sessionpkg.Info, err error, stderr io.Write
 		return info
 	}
 	return next
+}
+
+// providerLimitHoldMaxSpan bounds how far out a recorded reset may gate a
+// provider. The longest provider window is a week; a reset beyond this is a
+// misparse and must not freeze the provider's starts.
+const providerLimitHoldMaxSpan = 8 * 24 * time.Hour
+
+// providerLimitHolds maps each provider to the latest reset recorded by any of
+// its sessions' usage-limit holds that is still ahead of now (sr-olfu). A
+// provider limit is account-wide — on 2026-10-16 every model was limited at
+// once — so while it holds, starting ANY session of that provider only lands
+// it in the same wall: the reconciler respawned named seats hourly and
+// replaced pool seats within minutes, each into the weekly limit.
+//
+// Holds without a parseable reset are left out: the gate must end on its own.
+// The evidence is the live parked sessions' records; a dead session's record is
+// cleared by observeProviderUsageLimit, so if every parked session goes away
+// the gate lifts until a replacement is observed held again.
+func providerLimitHolds(infos []sessionpkg.Info, now time.Time) map[string]time.Time {
+	var holds map[string]time.Time
+	for _, info := range infos {
+		provider := strings.TrimSpace(info.Provider)
+		if provider == "" || !info.ProviderLimited() {
+			continue
+		}
+		until, err := time.Parse(time.RFC3339, strings.TrimSpace(info.ProviderLimitUntil))
+		if err != nil || !until.After(now) || until.Sub(now) > providerLimitHoldMaxSpan {
+			continue
+		}
+		if holds == nil {
+			holds = make(map[string]time.Time)
+		}
+		if until.After(holds[provider]) {
+			holds[provider] = until
+		}
+	}
+	return holds
+}
+
+// providerLimitGatedProvider is the provider whose usage-limit hold gates
+// starting this session: its recorded provider, else the template's resolved
+// one. The deterministic control-dispatcher runs gc rather than the provider
+// (though its bead records the workspace provider), so nothing gates it.
+func providerLimitGatedProvider(cfg *config.City, info sessionpkg.Info, tp TemplateParams) string {
+	if cfg != nil && config.IsDeterministicControlDispatcher(findAgentByTemplate(cfg, tp.TemplateName)) {
+		return ""
+	}
+	if p := strings.TrimSpace(info.Provider); p != "" {
+		return p
+	}
+	if tp.ResolvedProvider != nil {
+		return strings.TrimSpace(tp.ResolvedProvider.Name)
+	}
+	return ""
 }
 
 // usageLimitProbeDue reports whether the session's pane may be captured now,

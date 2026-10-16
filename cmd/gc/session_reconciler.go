@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime/debug"
@@ -4745,6 +4746,10 @@ func reconcileSessionBeadsTracedWithNamedDemand(
 		"assigned_work_bead_cnt": len(assignedWorkBeads),
 	})
 
+	// Providers on a recorded usage-limit hold, read once from the tick's
+	// snapshot: no session of theirs is started until the reset (sr-olfu).
+	providerHolds := providerLimitHolds(slices.Collect(maps.Values(infoByID)), clk.Now())
+
 	phaseStart = time.Now()
 	for _, target := range wakeTargets {
 		if ctx != nil && ctx.Err() != nil {
@@ -4923,6 +4928,23 @@ func reconcileSessionBeadsTracedWithNamedDemand(
 						})
 					}
 					continue // skip startCandidates; wake budget is NOT consumed
+				}
+			}
+			// Provider usage-limit gate (sr-olfu): another session of this
+			// provider is parked on a usage limit with a known reset, so a start
+			// now lands in the same wall. Like the health gate it spends no wake
+			// budget; the start is retried once the reset passes.
+			if provider := providerLimitGatedProvider(cfg, info, target.tp); provider != "" {
+				if until, held := providerHolds[provider]; held {
+					logStandingCondition(dt, stderr, info.ID, string(TraceReasonProviderLimit), fmt.Sprintf(
+						"session reconciler: not starting %s: provider %q is on a usage limit until %s", name, provider, until.UTC().Format(time.RFC3339)), clk.Now())
+					if trace != nil {
+						trace.RecordDecision(TraceSiteReconcilerProviderHealthGate, TraceReasonProviderLimit, TraceOutcomeRespawnSkipped, target.tp.TemplateName, name, traceRecordPayload{
+							"provider": provider,
+							"until":    until.UTC().Format(time.RFC3339),
+						})
+					}
+					continue
 				}
 			}
 			// Endpoint capacity gate: while the serving endpoint refuses
