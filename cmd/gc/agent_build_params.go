@@ -99,6 +99,13 @@ type agentBuildParams struct {
 	// does not set it.
 	providerHealthSnapshot *providerHealthSnapshot
 
+	// providerLimitHolds maps a provider to the reset of a usage-limit hold
+	// one of its sessions records (providerLimitHolds, sr-olfu).
+	// selectOrPlanPoolSessionBead refuses new creates for a held provider;
+	// existing-session reuse is unaffected. Assigned alongside
+	// providerHealthSnapshot; nil gates nothing.
+	providerLimitHolds map[string]time.Time
+
 	// planOnly makes the pool planner decide without effects: selection skips
 	// singleton identity normalization, trigger metadata skips worktree.Verify
 	// (the create plan carries the spec), and the dependency floor returns a

@@ -192,6 +192,7 @@ const (
 	TraceReasonCircuitOpen                   TraceReasonCode = "circuit_open"
 	TraceReasonCircuitTrip                   TraceReasonCode = "circuit_trip"
 	TraceReasonProviderRed                   TraceReasonCode = "provider_red"
+	TraceReasonProviderLimit                 TraceReasonCode = "provider_limit"
 	TraceReasonHealClearedStaleLease         TraceReasonCode = "heal_cleared_stale_lease"
 	TraceReasonPendingCreateRecoveryInFlight TraceReasonCode = "pending_create_recovery_in_flight"
 	TraceReasonPendingCreateRebuildFailed    TraceReasonCode = "pending_create_rebuild_failed"
