@@ -32,10 +32,15 @@ func TestContainsProviderUsageLimitHold(t *testing.T) {
 		{name: "live hold, sonnet pane", content: readUsageLimitFixture(t, "usage_limit_hold_claude_sonnet.txt"), want: true},
 		// Captured through gc session peek — the reconciler's own peek path.
 		{name: "live hold, via gc peek", content: readUsageLimitFixture(t, "usage_limit_hold_claude_gcpeek.txt"), want: true},
+		// The other shape: the turn ENDED on the limit (no auto-continue
+		// footer) and the session idles at an empty prompt until someone
+		// re-prompts it after the reset. Real capture of the intake poller.
+		{name: "turn ended on the limit, idle prompt", content: readUsageLimitFixture(t, "usage_limit_turn_ended_claude_gcpeek.txt"), want: true},
+		{name: "limit notice quoted in prose, then more output", content: "● The pane said You've hit your weekly limit earlier.\n\n✻ Worked for 3s\n────\n❯ \n────\n  [x] main", want: false},
 		{name: "healthy idle pane", content: readUsageLimitFixture(t, "usage_limit_none_claude_idle.txt"), want: false},
-		// After the reset the footer clears but the "● Usage limit reached ·
-		// continuing automatically" line stays in scrollback; that must not
-		// keep the session classified as held.
+		// After the reset the footer clears and the resumed turn lands below
+		// the old banner, which stays in scrollback; that must not keep the
+		// session classified as held.
 		{name: "cleared hold, banner only in scrollback", content: readUsageLimitFixture(t, "usage_limit_cleared_claude_scrollback.txt"), want: false},
 		{name: "anchors on separate lines", content: "Usage limit reached\ncontinuing automatically at 6am", want: false},
 		{name: "empty", content: "", want: false},
@@ -70,6 +75,7 @@ func TestParseProviderLimitReset(t *testing.T) {
 	}{
 		{name: "real pane, reset tomorrow morning", content: readUsageLimitFixture(t, "usage_limit_hold_claude_opus.txt"), want: time.Date(2026, 10, 17, 6, 0, 0, 0, bucharest), ok: true},
 		{name: "gc peek capture", content: readUsageLimitFixture(t, "usage_limit_hold_claude_gcpeek.txt"), want: time.Date(2026, 10, 17, 6, 0, 0, 0, bucharest), ok: true},
+		{name: "turn-ended notice with comma date", content: readUsageLimitFixture(t, "usage_limit_turn_ended_claude_gcpeek.txt"), want: time.Date(2026, 10, 17, 6, 0, 0, 0, bucharest), ok: true},
 		{name: "later today", content: "You've hit your weekly limit · resets 11pm (Europe/Bucharest)", want: time.Date(2026, 10, 16, 23, 0, 0, 0, bucharest), ok: true},
 		{name: "minutes", content: "You've hit your session limit · resets 7:30pm (Europe/Bucharest)", want: time.Date(2026, 10, 16, 19, 30, 0, 0, bucharest), ok: true},
 		{name: "12am is midnight", content: "resets 12am (Europe/Bucharest)", want: time.Date(2026, 10, 17, 0, 0, 0, 0, bucharest), ok: true},

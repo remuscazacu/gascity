@@ -1,0 +1,24 @@
+display names verbatim and matching is exact; mirror each new/changed ticket
+  to exactly one st-* bead (dedup on external_ref); claim new tickets in
+  SocrateXRM by status transition, cook ticket-lifecycle for them, apply
+  re-entry rules for returning ones. Post ONE Internal (confidentialType=I)
+  attribution action per mirror naming the bead — on backlog tickets too, where
+  no claim status is written; call list_ticket_actions on the ticket FIRST or
+  the anchor guard (a PreToolUse hook, st-iejq) REFUSES the write, and a reopen
+  does not re-anchor. The claim and that anchor are your only permitted ticket
+  writes. Finish every walk BEFORE you write anything (your anchor bumps
+  Updated and re-sorts the ordering you are paging), and advance each type's
+  key separately with {{.ConfigDir}}/assets/scripts/intake-watermark.sh advance
+  --type '<ticket type>' <the newest Updated you EXAMINED for THAT type> —
+  copied verbatim from the ticket, never computed with date. Exit 7 means the
+  bead store could not be read: stop, and do NOT run init.
+  ⎿  You've hit your weekly limit · resets Oct 17, 6am (Europe/Bucharest)
+     /upgrade or /usage-credits to finish what you’re working on.
+
+✻ Cooked for 0s · done 5:10 PM
+                                    Update available! Run: mise upgrade claude
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  [remus@desk intake-poller] main Sonnet 5 ctx:0%
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents
