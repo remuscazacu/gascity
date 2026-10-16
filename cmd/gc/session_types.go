@@ -84,6 +84,8 @@ type drainTracker struct {
 	liveClaimVetoes  map[string]string               // session bead ID -> claimed work bead ID whose live claim last vetoed a demand-class drain (log-once dedupe)
 	drainSkips       map[drainSkipKey]*drainSkipMark // session bead ID + condition kind -> last printed line (log-on-transition dedupe; session_drain_skip_log.go)
 	idleProbeCursor  int
+	// usageLimitProbedAt: session bead ID -> last live-pane usage-limit capture (sr-p8se throttle)
+	usageLimitProbedAt map[string]time.Time
 }
 
 func newDrainTracker() *drainTracker {

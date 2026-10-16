@@ -58,6 +58,7 @@ go_library(
         "turn_fence.go",
         "turn_identity.go",
         "unix_listener.go",
+        "usage_limit_hold.go",
         "worker.go",
     ],
     importpath = "github.com/gastownhall/gascity/internal/runtime",
@@ -139,6 +140,7 @@ go_test(
         "turn_identity_test.go",
         "turn_interrupt_test.go",
         "unix_listener_test.go",
+        "usage_limit_hold_test.go",
     ],
     data = glob(
         ["**"],

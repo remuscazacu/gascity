@@ -13,6 +13,7 @@ import (
 	"github.com/gastownhall/gascity/internal/beads"
 	"github.com/gastownhall/gascity/internal/config"
 	"github.com/gastownhall/gascity/internal/runtime"
+	"github.com/gastownhall/gascity/internal/session"
 	workdirutil "github.com/gastownhall/gascity/internal/workdir"
 )
 
@@ -647,7 +648,10 @@ func agentProviderInfo(a *config.Agent, cfg *config.City) (provider, displayName
 // Decides (valid, city switch on): working is working, blocked is blocked,
 // error is error, and idle or done is waiting with an active bead and idle
 // without one. Any other reading leaves today's derivation.
-func computeAgentState(suspended, quarantined, running bool, activeBead string, lastActivity *time.Time, program runtime.ProgramStatus) string {
+// providerLimited is a live session parked on a provider usage-limit hold
+// (sr-p8se): it is alive and may hold work, but does none until the reset,
+// so it reads rate_limited ahead of any program-status reading.
+func computeAgentState(suspended, quarantined, running, providerLimited bool, activeBead string, lastActivity *time.Time, program runtime.ProgramStatus) string {
 	if suspended {
 		return "suspended"
 	}
@@ -656,6 +660,9 @@ func computeAgentState(suspended, quarantined, running bool, activeBead string, 
 	}
 	if !running {
 		return "stopped"
+	}
+	if providerLimited {
+		return "rate_limited"
 	}
 	if program.Decides() {
 		switch program.State {
@@ -678,6 +685,24 @@ func computeAgentState(suspended, quarantined, running bool, activeBead string, 
 		return "waiting"
 	}
 	return "idle"
+}
+
+// sessionProviderLimited reports whether the session bead records a provider
+// usage-limit hold (session.ProviderLimitSeenAtKey, written by the reconciler).
+// An unknown session or a failed read is reported as not limited.
+func (s *Server) sessionProviderLimited(sessionID string) bool {
+	if sessionID == "" {
+		return false
+	}
+	store := s.state.Stores().Sessions()
+	if store == (beads.SessionStore{}) {
+		return false
+	}
+	b, err := store.Get(sessionID)
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(b.Metadata[session.ProviderLimitSeenAtKey]) != ""
 }
 
 // enrichSessionMeta populates model and context usage fields on the agent

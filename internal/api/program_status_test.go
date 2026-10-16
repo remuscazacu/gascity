@@ -199,7 +199,7 @@ func TestComputeAgentStateBlockedAndErrorOnlyWhenOn(t *testing.T) {
 		{"unread", false, true, "", nil, runtime.ProgramStatus{}, "idle"},
 	}
 	for _, tc := range cases {
-		if got := computeAgentState(tc.suspended, false, tc.running, tc.activeBead, tc.lastAct, tc.program); got != tc.want {
+		if got := computeAgentState(tc.suspended, false, tc.running, false, tc.activeBead, tc.lastAct, tc.program); got != tc.want {
 			t.Errorf("%s: computeAgentState = %q, want %q", tc.name, got, tc.want)
 		}
 	}

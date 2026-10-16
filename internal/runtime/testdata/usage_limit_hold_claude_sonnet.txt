@@ -1,0 +1,24 @@
+  ⎿  You've hit your weekly limit · resets 6am (Europe/Bucharest)
+     Continuing automatically at 6am · esc to cancel
+     /usage-credits to continue now
+
+● Usage limit reached · continuing automatically at 6am · esc or type to
+  cancel
+
+✻ Brewed for 1s · done 6:38 PM
+
+❯ Classify family + severity from the ticket, set SLA, resolve tenant, route to
+  l1-support or l2-<family>. Read-only (harness deny-list).
+  ⎿  You've hit your weekly limit · resets 6am (Europe/Bucharest)
+     Continuing automatically at 6am · esc to cancel
+     /usage-credits to continue now
+
+✻ Worked for 0s · done 6:38 PM
+                                    Update available! Run: mise upgrade claude
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⚠ Usage limit reached · continuing automatically at 6am · esc to cancel
+  ⚠ /usage-credits to continue now
+  [remus@desk dispatch] main Sonnet 5 ctx:0%
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents
