@@ -14,6 +14,10 @@
      /usage-credits to continue now
 
 ✻ Worked for 0s · done 6:38 PM
+
+● Resumed after the reset; the ticket is triaged and routed.
+
+✻ Worked for 41s · done 6:02 AM
                                     Update available! Run: mise upgrade claude
 ────────────────────────────────────────────────────────────────────────────────
 ❯ 

@@ -24,8 +24,54 @@ const usageLimitFooterFallbackLines = 4
 // sentence is also printed into scrollback as "● Usage limit reached ·
 // continuing automatically ..." and stays there after the reset; matching the
 // whole pane would keep a recovered session classified as held.
+//
+// It also reports the second shape the same limit takes: the provider ends the
+// turn on "⎿ You've hit your weekly limit · resets ..." and idles at an empty
+// prompt without the auto-continue footer. That session is just as stuck — and
+// will not resume on its own at the reset either — so it counts as held while
+// that notice is the last thing above the prompt.
 func ContainsProviderUsageLimitHold(content string) bool {
-	return lineContainsAll(paneStatusFooter(content), "Usage limit reached", "continuing automatically")
+	return lineContainsAll(paneStatusFooter(content), "Usage limit reached", "continuing automatically") ||
+		lastTurnEndedOnUsageLimit(content)
+}
+
+// usageLimitTurnTailLines bounds how many content lines above the prompt box
+// are searched for the turn-ending limit notice (the notice and its
+// "/upgrade or /usage-credits" continuation).
+const usageLimitTurnTailLines = 3
+
+// lastTurnEndedOnUsageLimit reports whether the last output above the prompt
+// box is the provider's limit notice. Turn-summary chrome ("✻ Worked for 0s",
+// the update banner, blank lines) is skipped; any other output — a resumed
+// turn, a prompt — ends the search, so the notice left in scrollback after the
+// session resumes does not match.
+func lastTurnEndedOnUsageLimit(content string) bool {
+	lines := strings.Split(strings.TrimRight(content, "\n"), "\n")
+	box := -1 // the rule that opens the prompt box: second-to-last rule
+	seen := 0
+	for i := len(lines) - 1; i >= 0; i-- {
+		if isHorizontalRule(lines[i]) {
+			if seen++; seen == 2 {
+				box = i
+				break
+			}
+		}
+	}
+	if box < 0 {
+		return false
+	}
+	examined := 0
+	for i := box - 1; i >= 0 && examined < usageLimitTurnTailLines; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" || strings.HasPrefix(line, "✻") || strings.Contains(line, "Update available") {
+			continue
+		}
+		if strings.Contains(line, "You've hit your") && strings.Contains(line, "limit") && strings.HasPrefix(line, "⎿") {
+			return true
+		}
+		examined++
+	}
+	return false
 }
 
 // paneStatusFooter returns the lines below the last horizontal rule (a line
@@ -50,8 +96,9 @@ func isHorizontalRule(line string) bool {
 
 // providerLimitResetRe matches the reset time the provider prints with a
 // limit: "resets 6am (Europe/Bucharest)", "resets 7:30pm", "Resets Oct 20 at
-// 11pm (America/Los_Angeles)", "continuing automatically at 6am".
-var providerLimitResetRe = regexp.MustCompile(`(?i)(?:resets|continuing automatically at)\s+(?:([a-z]{3})\s+(\d{1,2})\s+at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)(?:\s*\(([^)]+)\))?`)
+// 11pm (America/Los_Angeles)", "resets Oct 17, 6am (Europe/Bucharest)",
+// "continuing automatically at 6am".
+var providerLimitResetRe = regexp.MustCompile(`(?i)(?:resets|continuing automatically at)\s+(?:([a-z]{3})\s+(\d{1,2})(?:,|\s+at)\s*)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)(?:\s*\(([^)]+)\))?`)
 
 // ParseProviderLimitReset extracts the next reset instant from a provider
 // limit message, relative to now. A match carrying an IANA zone is preferred
