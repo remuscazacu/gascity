@@ -15,6 +15,7 @@ import (
 	"github.com/gastownhall/gascity/internal/beads"
 	"github.com/gastownhall/gascity/internal/config"
 	"github.com/gastownhall/gascity/internal/runtime"
+	"github.com/gastownhall/gascity/internal/session"
 	"github.com/gastownhall/gascity/internal/sessionlog"
 )
 
@@ -675,6 +676,73 @@ func TestAgentGetActiveBeadUsesSessionIDOwnership(t *testing.T) {
 	}
 }
 
+// startProviderLimitedWorker starts myrig--worker bound to a session bead that
+// records a provider usage-limit hold (sr-p8se).
+func startProviderLimitedWorker(t *testing.T, state *fakeState) {
+	t.Helper()
+	sessionName := "myrig--worker"
+	state.cityBeadStore = beads.NewMemStore()
+	sess, err := state.cityBeadStore.Create(beads.Bead{Title: "myrig/worker", Type: "session", Metadata: map[string]string{
+		session.ProviderLimitSeenAtKey: "2026-10-16T15:50:00Z",
+		session.ProviderLimitUntilKey:  "2026-10-17T03:00:00Z",
+	}})
+	if err != nil {
+		t.Fatalf("Create(session): %v", err)
+	}
+	if err := state.sp.Start(context.Background(), sessionName, runtime.Config{}); err != nil {
+		t.Fatalf("Start(%s): %v", sessionName, err)
+	}
+	if err := state.sp.SetMeta(sessionName, "GC_SESSION_ID", sess.ID); err != nil {
+		t.Fatalf("SetMeta(GC_SESSION_ID): %v", err)
+	}
+}
+
+func TestAgentGetReportsProviderUsageLimitAsRateLimited(t *testing.T) {
+	state := newFakeState(t)
+	startProviderLimitedWorker(t, state)
+
+	h := newTestCityHandlerWith(t, state, New(state))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest("GET", cityURL(state, "/agent/myrig/worker"), nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp agentResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.State != "rate_limited" {
+		t.Errorf("state = %q, want rate_limited", resp.State)
+	}
+}
+
+func TestAgentListReportsProviderUsageLimitAsRateLimited(t *testing.T) {
+	state := newFakeState(t)
+	startProviderLimitedWorker(t, state)
+
+	h := newTestCityHandlerWith(t, state, New(state))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest("GET", cityURL(state, "/agents"), nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var list struct {
+		Items []agentResponse `json:"items"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&list); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	for _, a := range list.Items {
+		if a.Name == "myrig/worker" {
+			if a.State != "rate_limited" {
+				t.Errorf("state = %q, want rate_limited", a.State)
+			}
+			return
+		}
+	}
+	t.Fatalf("myrig/worker missing from %+v", list.Items)
+}
+
 func TestAgentListActiveBeadUsesCachedLookup(t *testing.T) {
 	state := newFakeState(t)
 	sessionName := "myrig--worker"
@@ -1213,26 +1281,32 @@ func TestComputeAgentState(t *testing.T) {
 	old := func() *time.Time { t := time.Now().Add(-20 * time.Minute); return &t }()
 
 	tests := []struct {
-		name        string
-		suspended   bool
-		quarantined bool
-		running     bool
-		activeBead  string
-		lastAct     *time.Time
-		want        string
+		name            string
+		suspended       bool
+		quarantined     bool
+		running         bool
+		providerLimited bool
+		activeBead      string
+		lastAct         *time.Time
+		want            string
 	}{
-		{"suspended", true, false, true, "", nil, "suspended"},
-		{"quarantined", false, true, false, "", nil, "quarantined"},
-		{"stopped", false, false, false, "", nil, "stopped"},
-		{"idle", false, false, true, "", nil, "idle"},
-		{"working", false, false, true, "bead-1", now, "working"},
-		{"waiting", false, false, true, "bead-1", old, "waiting"},
-		{"working-no-activity", false, false, true, "bead-1", nil, "waiting"},
+		{"suspended", true, false, true, false, "", nil, "suspended"},
+		{"quarantined", false, true, false, false, "", nil, "quarantined"},
+		{"stopped", false, false, false, false, "", nil, "stopped"},
+		{"idle", false, false, true, false, "", nil, "idle"},
+		{"working", false, false, true, false, "bead-1", now, "working"},
+		{"waiting", false, false, true, false, "bead-1", old, "waiting"},
+		{"working-no-activity", false, false, true, false, "bead-1", nil, "waiting"},
+		// sr-p8se: a live seat parked on a provider usage limit is not
+		// working, whatever bead it holds.
+		{"rate-limited-holding-work", false, false, true, true, "bead-1", now, "rate_limited"},
+		{"rate-limited-idle", false, false, true, true, "", nil, "rate_limited"},
+		{"rate-limited-but-stopped", false, false, false, true, "", nil, "stopped"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := computeAgentState(tt.suspended, tt.quarantined, tt.running, tt.activeBead, tt.lastAct)
+			got := computeAgentState(tt.suspended, tt.quarantined, tt.running, tt.providerLimited, tt.activeBead, tt.lastAct)
 			if got != tt.want {
 				t.Errorf("computeAgentState() = %q, want %q", got, tt.want)
 			}

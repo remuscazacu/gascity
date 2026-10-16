@@ -3453,6 +3453,14 @@ func reconcileSessionBeadsTracedWithNamedDemand(
 
 		policy := resolveSessionSleepPolicyInfo(infoByID[id], cfg, sp)
 
+		// A live provider parked on a usage-limit hold never reaches the
+		// exited-session lane below; record it on the bead (sr-p8se). The
+		// capture is the bare provider Peek, not the cached worker peek: a
+		// worker handle costs store reads and attachment/activity
+		// observations the fast path must not pay for every live session.
+		usageLimitPeek := func(lines int) (string, error) { return sp.Peek(name, lines) }
+		tick.set(id, observeProviderUsageLimit(infoByID[id], alive, usageLimitPeek, dt, sessFront, clk, stderr))
+
 		rlNextFwd, rateLimitHit, rateLimitErr := checkRateLimitStability(infoByID[id], cfg, alive, dt, sessFront, clk, peek)
 		if rateLimitHit || rateLimitErr != nil {
 			// Advance the snapshot with the write-returns-Info result (Step 6d, group 1).
@@ -6722,6 +6730,11 @@ func clearMissingIdleProbes(dt *drainTracker, infoByID map[string]sessionpkg.Inf
 	for id := range dt.liveClaimVetoes {
 		if _, ok := infoByID[id]; !ok {
 			delete(dt.liveClaimVetoes, id)
+		}
+	}
+	for id := range dt.usageLimitProbedAt {
+		if _, ok := infoByID[id]; !ok {
+			delete(dt.usageLimitProbedAt, id)
 		}
 	}
 	dt.mu.Unlock()

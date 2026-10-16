@@ -413,6 +413,10 @@ var registry = slices.Concat([]Field{
 	same(ClassMarker, false, sites(legacy(srcReconcile, "providerTerminalErrorPatch")), "provider_terminal_error",
 		"provider_terminal_error_at", "session_health", "session_health_reason", "session_drainable"),
 	same(ClassMarker, false, sites(legacy(srcReconciler, "emitSessionWakeRefused")), "wake_refused_event_at"),
+	// sr-p8se: a live session parked on a provider usage-limit hold. Read by
+	// the agents API for its rate_limited state; no lifecycle decision reads it.
+	same(ClassAdvisory, false, sites(legacy("internal/session/provider_limit.go", "ProviderLimitHoldPatch"),
+		legacy("internal/session/provider_limit.go", "ProviderLimitClearPatch")), ProviderLimitSeenAtKey, ProviderLimitUntilKey),
 	same(ClassMarker, false, sites(legacy(srcReconciler, "beginIdleRespawnDrainIfIdle")), "idle_respawn_bead_id"),
 
 	// Advisory: diagnostics, pacing and usage stamps. The execution backstop's

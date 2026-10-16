@@ -11,6 +11,7 @@ import (
 	"github.com/gastownhall/gascity/internal/agentutil"
 	"github.com/gastownhall/gascity/internal/beads"
 	"github.com/gastownhall/gascity/internal/config"
+	"github.com/gastownhall/gascity/internal/session"
 	workdirutil "github.com/gastownhall/gascity/internal/workdir"
 )
 
@@ -510,7 +511,9 @@ func resolveProviderInfo(agentProvider string, cfg *config.City) (provider, disp
 }
 
 // computeAgentState derives the state enum from existing agent data.
-func computeAgentState(suspended, quarantined, running bool, activeBead string, lastActivity *time.Time) string {
+// providerLimited is a live session parked on a provider usage-limit hold
+// (sr-p8se): it is alive and may hold work, but does none until the reset.
+func computeAgentState(suspended, quarantined, running, providerLimited bool, activeBead string, lastActivity *time.Time) string {
 	if suspended {
 		return "suspended"
 	}
@@ -520,6 +523,9 @@ func computeAgentState(suspended, quarantined, running bool, activeBead string, 
 	if !running {
 		return "stopped"
 	}
+	if providerLimited {
+		return "rate_limited"
+	}
 	if activeBead != "" {
 		if lastActivity != nil && time.Since(*lastActivity) < 10*time.Minute {
 			return "working"
@@ -527,6 +533,24 @@ func computeAgentState(suspended, quarantined, running bool, activeBead string, 
 		return "waiting"
 	}
 	return "idle"
+}
+
+// sessionProviderLimited reports whether the session bead records a provider
+// usage-limit hold (session.ProviderLimitSeenAtKey, written by the reconciler).
+// An unknown session or a failed read is reported as not limited.
+func (s *Server) sessionProviderLimited(sessionID string) bool {
+	if sessionID == "" {
+		return false
+	}
+	store := s.state.SessionsBeadStore().Store
+	if store == nil {
+		return false
+	}
+	b, err := store.Get(sessionID)
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(b.Metadata[session.ProviderLimitSeenAtKey]) != ""
 }
 
 // enrichSessionMeta populates model and context usage fields on the agent

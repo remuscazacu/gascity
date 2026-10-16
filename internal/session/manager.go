@@ -380,6 +380,13 @@ type Info struct {
 	// SleepIntent is the RAW sleep_intent metadata. The sleep-intent branch reads
 	// it as != "" and == "idle-stop-pending".
 	SleepIntent string // sleep_intent (raw)
+	// ProviderLimitSeenAt is the RAW provider_limit_seen_at metadata (RFC3339 or
+	// empty): when the reconciler first saw this LIVE session parked on a
+	// provider usage-limit hold (sr-p8se). Empty means no hold is recorded.
+	ProviderLimitSeenAt string // provider_limit_seen_at (raw)
+	// ProviderLimitUntil is the RAW provider_limit_until metadata: the reset
+	// instant the provider printed (RFC3339), or empty when it was not parseable.
+	ProviderLimitUntil string // provider_limit_until (raw)
 	// InstanceToken is the RAW instance_token metadata. The wake path compares it
 	// against the live instance token to detect a superseded session.
 	InstanceToken string // instance_token (raw)

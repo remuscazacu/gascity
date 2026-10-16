@@ -153,6 +153,8 @@ func infoFromPersistedBeadFrozen(b beads.Bead) Info {
 		TemplateOverrides:              b.Metadata["template_overrides"],
 		WakeAttemptsMetadata:           b.Metadata["wake_attempts"],
 		WakeRefusedEventAt:             b.Metadata["wake_refused_event_at"],
+		ProviderLimitSeenAt:            b.Metadata[ProviderLimitSeenAtKey],
+		ProviderLimitUntil:             b.Metadata[ProviderLimitUntilKey],
 		ProviderKind:                   b.Metadata["provider_kind"],
 		BuiltinAncestor:                b.Metadata["builtin_ancestor"],
 

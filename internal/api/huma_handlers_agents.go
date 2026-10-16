@@ -238,7 +238,7 @@ func (s *Server) humaHandleAgentList(ctx context.Context, input *AgentListInput)
 				}
 			}
 			quarantined := s.state.IsQuarantined(sessionName)
-			resp.State = computeAgentState(suspended, quarantined, effectiveRunning, resp.ActiveBead, lastActivity)
+			resp.State = computeAgentState(suspended, quarantined, effectiveRunning, running && s.sessionProviderLimited(sessionID), resp.ActiveBead, lastActivity)
 
 			if wantPeek && running {
 				if output, err := sp.Peek(sessionName, 5); err == nil {
@@ -387,7 +387,7 @@ func (s *Server) agentByName(ctx context.Context, name string) (*IndexOutput[age
 		}
 	}
 	quarantined := s.state.IsQuarantined(sessionName)
-	resp.State = computeAgentState(suspended, quarantined, effectiveRunning, resp.ActiveBead, lastActivity)
+	resp.State = computeAgentState(suspended, quarantined, effectiveRunning, running && s.sessionProviderLimited(sessionID), resp.ActiveBead, lastActivity)
 
 	if running && provider == "claude" && canAttributeSession(agentCfg, name, cfg, s.state.CityPath()) {
 		s.enrichSessionMeta(&resp, agentCfg, name)

@@ -26,6 +26,7 @@ var allProjectedMetadataKeys = []string{
 	NamedSessionIdentityMetadata, NamedSessionMetadataKey, NamedSessionModeMetadata,
 	"common_name", "pool_slot", "pool_managed", "session_origin",
 	"dependency_only", "manual_session",
+	ProviderLimitSeenAtKey, ProviderLimitUntilKey,
 	"pool_alias_conflict", "pool_alias_conflict_count", "pool_alias_conflict_at",
 	MCPIdentityMetadataKey,
 	MCPServersSnapshotMetadataKey, "provider_terminal_error", "session_health",

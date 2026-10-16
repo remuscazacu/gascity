@@ -1,0 +1,25 @@
+named_session "call-control": mode "always" with wake_mode "fresh" on template "call-control" starts a fresh provider session after every drain; use only for a deliberate restart-per-cycle actor
+Continuing automatically at 6am · esc to cancel
+     /usage-credits to continue now
+
+● Usage limit reached · continuing automatically at 6am · esc or type to
+  cancel
+
+✻ Cooked for 1s · done 5:38 PM
+
+❯ Claim the escalated bead, RCA against your family source+docs (cite
+  file:line), resolve non-risky/central or gate a risky write; always write a
+  KB entry.
+  ⎿  You've hit your weekly limit · resets 6am (Europe/Bucharest)
+     Continuing automatically at 6am · esc to cancel
+     /usage-credits to continue now
+
+✻ Worked for 0s · done 5:38 PM
+                                    Update available! Run: mise upgrade claude
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⚠ Usage limit reached · continuing automatically at 6am · esc to cancel
+  ⚠ /usage-credits to continue now
+  [remus@desk l2-erp] main Opus 4.8 ctx:0%
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents
