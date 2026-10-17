@@ -939,3 +939,30 @@ func TestExecutionBackstopRecordsARevalidateHoldWithoutFlapping(t *testing.T) {
 		t.Fatalf("hold breadcrumb after delivery = %q, want cleared", got)
 	}
 }
+
+// TestExecutionBackstopHoldsAProviderLimitedSession: a session parked on a
+// provider usage limit cannot execute its claim until the reset, so nudging it
+// is noise and draining it as stalled only restarts it into the same limit. On
+// 2026-10-17 srvcity drained held pool seats this way 758 times (sr-olfu).
+func TestExecutionBackstopHoldsAProviderLimitedSession(t *testing.T) {
+	f := newExecutionBackstopFixture(t)
+	f.setSessionMeta(t, map[string]string{
+		"provider_limit_seen_at": f.now.Add(-time.Hour).Format(time.RFC3339),
+		"provider_limit_until":   f.now.Add(2 * time.Hour).Format(time.RFC3339),
+	})
+	f.idleFor(t, 10*time.Minute)
+	for i := 0; i < 6; i++ {
+		f.now = f.now.Add(10 * time.Minute)
+		f.idleFor(t, 10*time.Minute)
+		f.tick(t)
+	}
+	if n := f.nudgeCount(); n != 0 {
+		t.Fatalf("nudges = %d to a session parked on a usage limit, want 0", n)
+	}
+	if n := f.stalledEvents(); n != 0 {
+		t.Fatalf("stalled escalations = %d for a session parked on a usage limit, want 0", n)
+	}
+	if got := f.sessionMeta(t, executionClaimHoldKey); !strings.HasPrefix(got, executionHoldProviderLimit+" ") {
+		t.Fatalf("hold breadcrumb = %q, want %s", got, executionHoldProviderLimit)
+	}
+}
