@@ -163,6 +163,7 @@ const (
 	// rather than drained.
 	executionHoldExecuting     = "executing"
 	executionHoldSnapshotError = "snapshot_error"
+	executionHoldProviderLimit = "provider_limit"
 )
 
 // executionClaimNudgeLabel names the execution backstop in its log lines and
@@ -356,6 +357,13 @@ func (p poolExecutionBackstop) resolve(s beads.Bead, _ map[string]beads.Bead, se
 		// s is resolve's copy, but it shares the engine's Metadata map, so
 		// the breadcrumb written here is visible to the rest of the tick.
 		p.observeHold(p.store, &s, executionHoldMultiClaim, p.stdout)
+		return backstopTarget{}, backstopResolutionHold
+	}
+	// A session parked on a provider usage limit cannot execute until the
+	// reset: a nudge is noise, and the stalled drain only restarts it into the
+	// same limit (sr-olfu). The record clears once the pane recovers.
+	if strings.TrimSpace(s.Metadata[sessionpkg.ProviderLimitSeenAtKey]) != "" {
+		p.observeHold(p.store, &s, executionHoldProviderLimit, p.stdout)
 		return backstopTarget{}, backstopResolutionHold
 	}
 	claim := claims[0]
