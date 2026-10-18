@@ -733,7 +733,8 @@ func buildDesiredStateWithSessionBeadsAt(
 		bp.assignedWorkBeads = poolWorkBeads
 		bp.poolScaleCheckPartialTemplates = poolScaleCheckPartialTemplates
 		bp.providerHealthSnapshot = loadProviderHealthSnapshot(cityPath)
-		bp.providerLimitHolds = providerLimitHolds(sessionBeads.OpenInfos(), poolDecisionTime)
+		bp.providerLimitHolds = mergeProviderLimitHolds(providerLimitHolds(sessionBeads.OpenInfos(), poolDecisionTime),
+			durableProviderLimitHolds(fsys.OSFS{}, cityPath, poolDecisionTime))
 		poolDesiredStates := ComputePoolDesiredStatesWithDemandTracedAt(
 			cfg,
 			poolWorkBeads,

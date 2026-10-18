@@ -30,6 +30,7 @@ import (
 	"github.com/gastownhall/gascity/internal/clock"
 	"github.com/gastownhall/gascity/internal/config"
 	"github.com/gastownhall/gascity/internal/events"
+	"github.com/gastownhall/gascity/internal/fsys"
 	"github.com/gastownhall/gascity/internal/reconcilekey"
 	"github.com/gastownhall/gascity/internal/runtime"
 	sessionpkg "github.com/gastownhall/gascity/internal/session"
@@ -1802,6 +1803,8 @@ func reconcileSessionBeadsTracedWithNamedDemand(
 	// residual. Same underlying store, so every session bead write is
 	// byte-identical.
 	sessFront := sessionpkg.NewStore(sessStore)
+	// The durable provider usage-limit ledger (sr-896w); the observer feeds it.
+	limitLedger := cityProviderLimitLedger{fs: fsys.OSFS{}, cityPath: cityPath, now: clk.Now, stderr: stderr}
 	// Every tick counts as a cycle, including ticks aborted by context
 	// cancellation after real work (e.g. starts) already executed — the
 	// counter means "cycles", not "cycles that ran to completion". started
@@ -3461,7 +3464,7 @@ func reconcileSessionBeadsTracedWithNamedDemand(
 		// worker handle costs store reads and attachment/activity
 		// observations the fast path must not pay for every live session.
 		usageLimitPeek := func(lines int) (string, error) { return sp.Peek(name, lines) }
-		tick.set(id, observeProviderUsageLimit(infoByID[id], alive, usageLimitPeek, dt, sessFront, rec, clk, stderr))
+		tick.set(id, observeProviderUsageLimit(infoByID[id], alive, usageLimitPeek, dt, sessFront, rec, limitLedger, clk, stderr))
 
 		rlNextFwd, rateLimitHit, rateLimitErr := checkRateLimitStability(infoByID[id], cfg, alive, dt, sessFront, clk, peek)
 		if rateLimitHit || rateLimitErr != nil {
@@ -4362,7 +4365,10 @@ func reconcileSessionBeadsTracedWithNamedDemand(
 
 	// Providers on a recorded usage-limit hold, read once from the tick's
 	// snapshot: no session of theirs is started until the reset (sr-olfu).
-	providerHolds := providerLimitHolds(slices.Collect(maps.Values(infoByID)), clk.Now())
+	// The city's durable ledger (sr-896w) keeps a hold after every parked
+	// session is gone, so a restart in an otherwise drained city is gated too.
+	providerHolds := mergeProviderLimitHolds(providerLimitHolds(slices.Collect(maps.Values(infoByID)), clk.Now()),
+		durableProviderLimitHolds(fsys.OSFS{}, cityPath, clk.Now()))
 
 	phaseStart = time.Now()
 	for _, target := range wakeTargets {

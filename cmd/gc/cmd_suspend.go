@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/gastownhall/gascity/internal/api"
 	"github.com/gastownhall/gascity/internal/config"
@@ -157,6 +158,15 @@ func doSuspendCity(fs fsys.FS, cityPath string, suspend bool, jsonOut bool, stdo
 			Type:  events.CityResumed,
 			Actor: eventActor(),
 		})
+		// A resume is the operator's word that the city may run again, and a
+		// suspended city has no live session that could see a provider limit
+		// lift early (sr-896w). Drop the recorded holds; a provider still on
+		// its limit is re-recorded by the first session that hits it.
+		if dropped, err := clearProviderLimitHold(fs, cityPath, ""); err != nil {
+			fmt.Fprintf(stderr, "%s: clearing recorded provider usage-limit holds: %v\n", cmd, err) //nolint:errcheck // best-effort stderr
+		} else if len(dropped) > 0 {
+			fmt.Fprintf(stderr, "%s: cleared recorded provider usage-limit hold(s): %s\n", cmd, strings.Join(dropped, ", ")) //nolint:errcheck // best-effort stderr
+		}
 	}
 	return writeCitySuspensionSuccess(stdout, stderr, cityPath, suspend, jsonOut)
 }
