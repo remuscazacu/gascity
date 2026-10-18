@@ -367,6 +367,19 @@ const (
 	SessionCreated = "session.created"
 	SessionClosed  = "session.closed"
 
+	// SessionProviderLimited fires when a LIVE session is first seen parked on
+	// a provider usage-limit hold (Claude's session/weekly limit: the provider
+	// stays up and waits for the reset instead of exiting), and
+	// SessionProviderLimitCleared fires when that hold is gone — the session
+	// resumed, or it stopped while parked. Each fires once per transition of
+	// the provider_limit_seen_at record on the session bead, never once per
+	// probe; the bead record is the dedup state, so a controller restart
+	// repeats none. Emitted by the session reconciler
+	// (cmd/gc/session_provider_usage_limit.go); the `gc doctor` check
+	// provider-usage-limit reads the same records city-wide (sr-bylv).
+	SessionProviderLimited      = "session.provider_limited"
+	SessionProviderLimitCleared = "session.provider_limit_cleared"
+
 	ConvoyCreated     = "convoy.created"
 	ConvoyClosed      = "convoy.closed"
 	ControllerStarted = "controller.started"
@@ -725,6 +738,7 @@ var KnownEventTypes = []string{
 	SessionConversationReset,
 	SessionPending, SessionPendingCleared,
 	SessionCreated, SessionClosed,
+	SessionProviderLimited, SessionProviderLimitCleared,
 	BeadCreated, BeadClosed, BeadDeleted, BeadUpdated,
 	BeadWorktreeReaped, BeadWorktreeReapSkipped,
 	BeadClaimRejected, BeadClaimReleased,

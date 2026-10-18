@@ -1,13 +1,16 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
 	"time"
 
+	"github.com/gastownhall/gascity/internal/api"
 	"github.com/gastownhall/gascity/internal/clock"
 	"github.com/gastownhall/gascity/internal/config"
+	"github.com/gastownhall/gascity/internal/events"
 	"github.com/gastownhall/gascity/internal/runtime"
 	sessionpkg "github.com/gastownhall/gascity/internal/session"
 )
@@ -32,7 +35,15 @@ const usageLimitProbeInterval = time.Minute
 // on a transition, and captures are throttled per session to
 // usageLimitProbeInterval. A dead session's record is cleared without a
 // capture. A failed or empty capture leaves everything as it was.
-func observeProviderUsageLimit(info sessionpkg.Info, alive bool, peek func(lines int) (string, error), dt *drainTracker, sessFront *sessionpkg.Store, clk clock.Clock, stderr io.Writer) sessionpkg.Info {
+//
+// Each transition that reaches the bead is also announced on rec as
+// session.provider_limited / session.provider_limit_cleared (sr-bylv), so the
+// stall reaches the event stream instead of only ~/.gc/supervisor.log: on
+// 2026-10-18 the weekly limit was recorded on every seat within minutes and
+// nobody noticed for 7 hours. The event follows the write, never precedes it:
+// a failed write leaves the bead as it was, the next probe retries the
+// transition, and that retry is the one that announces it.
+func observeProviderUsageLimit(info sessionpkg.Info, alive bool, peek func(lines int) (string, error), dt *drainTracker, sessFront *sessionpkg.Store, rec events.Recorder, clk clock.Clock, stderr io.Writer) sessionpkg.Info {
 	if sessFront == nil {
 		return info
 	}
@@ -41,7 +52,7 @@ func observeProviderUsageLimit(info sessionpkg.Info, alive bool, peek func(lines
 		if !info.ProviderLimited() {
 			return info
 		}
-		return clearProviderLimit(info, sessFront, stderr)
+		return clearProviderLimit(info, sessFront, rec, api.ProviderLimitClearedSessionGone, stderr)
 	}
 	if peek == nil || !dt.usageLimitProbeDue(info.ID, now) {
 		return info
@@ -61,27 +72,82 @@ func observeProviderUsageLimit(info sessionpkg.Info, alive bool, peek func(lines
 		}
 		fmt.Fprintf(stderr, "session reconciler: %s (%s) is parked on a provider usage limit; resets %s\n", info.SessionNameMetadata, info.ID, resets) //nolint:errcheck
 		next, err := sessFront.ApplyPatchInfo(info, sessionpkg.ProviderLimitHoldPatch(now, until))
-		return providerLimitWritten(info, next, err, stderr)
+		if err != nil {
+			return providerLimitWriteFailed(info, err, stderr)
+		}
+		recordProviderLimitEvent(rec, events.SessionProviderLimited, next, api.SessionProviderLimitedPayload{
+			SessionID:   next.ID,
+			SessionName: next.SessionNameMetadata,
+			Template:    next.Template,
+			Provider:    next.Provider,
+			Until:       strings.TrimSpace(next.ProviderLimitUntil),
+		}, fmt.Sprintf("%s is parked on a provider usage limit; resets %s", providerLimitEventName(next), resets), stderr)
+		return next
 	case !held && info.ProviderLimited():
 		fmt.Fprintf(stderr, "session reconciler: %s (%s) is no longer parked on a provider usage limit\n", info.SessionNameMetadata, info.ID) //nolint:errcheck
-		return clearProviderLimit(info, sessFront, stderr)
+		return clearProviderLimit(info, sessFront, rec, api.ProviderLimitClearedResumed, stderr)
 	}
 	return info
 }
 
-func clearProviderLimit(info sessionpkg.Info, sessFront *sessionpkg.Store, stderr io.Writer) sessionpkg.Info {
+// clearProviderLimit drops a recorded hold and, once the write landed,
+// announces session.provider_limit_cleared with the given reason.
+func clearProviderLimit(info sessionpkg.Info, sessFront *sessionpkg.Store, rec events.Recorder, reason string, stderr io.Writer) sessionpkg.Info {
 	next, err := sessFront.ApplyPatchInfo(info, sessionpkg.ProviderLimitClearPatch())
-	return providerLimitWritten(info, next, err, stderr)
+	if err != nil {
+		return providerLimitWriteFailed(info, err, stderr)
+	}
+	msg := providerLimitEventName(info) + " is no longer parked on a provider usage limit"
+	if reason == api.ProviderLimitClearedSessionGone {
+		msg = providerLimitEventName(info) + " stopped while parked on a provider usage limit"
+	}
+	recordProviderLimitEvent(rec, events.SessionProviderLimitCleared, info, api.SessionProviderLimitClearedPayload{
+		SessionID:   info.ID,
+		SessionName: info.SessionNameMetadata,
+		Template:    info.Template,
+		Provider:    info.Provider,
+		Until:       strings.TrimSpace(info.ProviderLimitUntil),
+		Reason:      reason,
+	}, msg, stderr)
+	return next
 }
 
-// providerLimitWritten returns the advanced snapshot, or info unchanged when
-// the write failed (ApplyPatchInfo folds nothing on error).
-func providerLimitWritten(info, next sessionpkg.Info, err error, stderr io.Writer) sessionpkg.Info {
-	if err != nil {
-		fmt.Fprintf(stderr, "session reconciler: recording provider usage-limit hold on %s: %v\n", info.ID, err) //nolint:errcheck
-		return info
+// recordProviderLimitEvent records one provider-limit transition. A nil
+// recorder (tests, callers without an event log) records nothing.
+func recordProviderLimitEvent(rec events.Recorder, typ string, info sessionpkg.Info, payload events.Payload, msg string, stderr io.Writer) {
+	if rec == nil {
+		return
 	}
-	return next
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		fmt.Fprintf(stderr, "session reconciler: marshal %s for %s: %v\n", typ, info.ID, err) //nolint:errcheck
+		return
+	}
+	rec.Record(events.Event{
+		Type:      typ,
+		Actor:     "gc",
+		Subject:   info.ID,
+		SessionID: info.ID,
+		Message:   msg,
+		Payload:   raw,
+	})
+}
+
+// providerLimitEventName is the session's runtime name, or its bead ID when
+// none is recorded.
+func providerLimitEventName(info sessionpkg.Info) string {
+	if name := strings.TrimSpace(info.SessionNameMetadata); name != "" {
+		return name
+	}
+	return info.ID
+}
+
+// providerLimitWriteFailed reports a failed hold write and returns info
+// unchanged (ApplyPatchInfo folds nothing on error), so the next probe retries
+// the transition.
+func providerLimitWriteFailed(info sessionpkg.Info, err error, stderr io.Writer) sessionpkg.Info {
+	fmt.Fprintf(stderr, "session reconciler: recording provider usage-limit hold on %s: %v\n", info.ID, err) //nolint:errcheck
+	return info
 }
 
 // providerLimitHoldMaxSpan bounds how far out a recorded reset may gate a

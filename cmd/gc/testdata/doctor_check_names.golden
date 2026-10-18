@@ -97,6 +97,7 @@ session-model
 startup-health-episodes
 ownerless-runtimes
 program-status-capture
+provider-usage-limit
 gate-sandbox-reads
 dolt-server
 fork-rate
