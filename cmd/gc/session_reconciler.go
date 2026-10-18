@@ -3461,7 +3461,7 @@ func reconcileSessionBeadsTracedWithNamedDemand(
 		// worker handle costs store reads and attachment/activity
 		// observations the fast path must not pay for every live session.
 		usageLimitPeek := func(lines int) (string, error) { return sp.Peek(name, lines) }
-		tick.set(id, observeProviderUsageLimit(infoByID[id], alive, usageLimitPeek, dt, sessFront, clk, stderr))
+		tick.set(id, observeProviderUsageLimit(infoByID[id], alive, usageLimitPeek, dt, sessFront, rec, clk, stderr))
 
 		rlNextFwd, rateLimitHit, rateLimitErr := checkRateLimitStability(infoByID[id], cfg, alive, dt, sessFront, clk, peek)
 		if rateLimitHit || rateLimitErr != nil {

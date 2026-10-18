@@ -940,7 +940,7 @@ export type EventEmitRequest = {
     type: string;
 };
 
-export type EventPayload = AdapterEventPayload | BackendCredentialResolvedPayload | BeadClaimRejectedPayload | BeadClaimReleasedPayload | BeadDeadAssigneeReopenedPayload | BeadEventPayload | BeadWorktreeReapSkippedPayload | BeadWorktreeReapedPayload | BlockedRecomputedPayload | BoundEventPayload | CityCreateSucceededPayload | CityLifecyclePayload | CityUnregisterSucceededPayload | ConditionalWritesDegradedPayload | ControlDispatcherScopeGapPayload | ControlRootSettleFailedPayload | ControlStalledPayload | ExecutionClaimWindowExpiredPayload | ExecutionStepStalledPayload | GroupCreatedEventPayload | HookClaimReclaimedStalePayload | InboundEventPayload | MailEventPayload | MoleculeResolvedPayload | NoPayload | OrderSkippedPayload | OrderSuppressedPayload | OutboundChannelMismatchPayload | OutboundEventPayload | ProjectIdentityStampedPayload | Record | RequestFailedPayload | RigCreateSucceededPayload | RigProvisionProgressPayload | RotatedPayload | SessionCreateSucceededPayload | SessionDemandClaimDivergencePayload | SessionDrainAckedWithAssignedWorkPayload | SessionLifecyclePayload | SessionMessageSucceededPayload | SessionPendingClearedPayload | SessionPendingPayload | SessionPoolSlotRetiredAtDrainDeadlinePayload | SessionResetStalledPayload | SessionStrandedClaimsPayload | SessionStrandedPayload | SessionSubmitSucceededPayload | SessionUnknownStatePayload | SessionWakeRefusedPayload | StorageBindingOutcomePayload | StoreDiskCriticalPayload | StoreDiskWarnPayload | StoreMaintenanceDonePayload | StoreMaintenanceFailedPayload | SupervisorFsPressureSkippedTickPayload | SupervisorRequestPayload | SupervisorShutdownPayload | SupervisorStartedPayload | UnboundEventPayload | WebhookReceivedPayload | WebhookRejectedPayload | WorkerOperationEventPayload;
+export type EventPayload = AdapterEventPayload | BackendCredentialResolvedPayload | BeadClaimRejectedPayload | BeadClaimReleasedPayload | BeadDeadAssigneeReopenedPayload | BeadEventPayload | BeadWorktreeReapSkippedPayload | BeadWorktreeReapedPayload | BlockedRecomputedPayload | BoundEventPayload | CityCreateSucceededPayload | CityLifecyclePayload | CityUnregisterSucceededPayload | ConditionalWritesDegradedPayload | ControlDispatcherScopeGapPayload | ControlRootSettleFailedPayload | ControlStalledPayload | ExecutionClaimWindowExpiredPayload | ExecutionStepStalledPayload | GroupCreatedEventPayload | HookClaimReclaimedStalePayload | InboundEventPayload | MailEventPayload | MoleculeResolvedPayload | NoPayload | OrderSkippedPayload | OrderSuppressedPayload | OutboundChannelMismatchPayload | OutboundEventPayload | ProjectIdentityStampedPayload | Record | RequestFailedPayload | RigCreateSucceededPayload | RigProvisionProgressPayload | RotatedPayload | SessionCreateSucceededPayload | SessionDemandClaimDivergencePayload | SessionDrainAckedWithAssignedWorkPayload | SessionLifecyclePayload | SessionMessageSucceededPayload | SessionPendingClearedPayload | SessionPendingPayload | SessionPoolSlotRetiredAtDrainDeadlinePayload | SessionProviderLimitClearedPayload | SessionProviderLimitedPayload | SessionResetStalledPayload | SessionStrandedClaimsPayload | SessionStrandedPayload | SessionSubmitSucceededPayload | SessionUnknownStatePayload | SessionWakeRefusedPayload | StorageBindingOutcomePayload | StoreDiskCriticalPayload | StoreDiskWarnPayload | StoreMaintenanceDonePayload | StoreMaintenanceFailedPayload | SupervisorFsPressureSkippedTickPayload | SupervisorRequestPayload | SupervisorShutdownPayload | SupervisorStartedPayload | UnboundEventPayload | WebhookReceivedPayload | WebhookRejectedPayload | WorkerOperationEventPayload;
 
 export type EventRotateAnchor = {
     /**
@@ -3442,6 +3442,56 @@ export type SessionPoolSlotRetiredAtDrainDeadlinePayload = {
     template?: string;
 };
 
+export type SessionProviderLimitClearedPayload = {
+    /**
+     * Provider the session runs, when known.
+     */
+    provider?: string;
+    /**
+     * Why it cleared: resumed (the live session no longer shows the hold) or session_gone (the session stopped while parked).
+     */
+    reason: 'resumed' | 'session_gone';
+    /**
+     * Session bead ID from the matching session.provider_limited.
+     */
+    session_id: string;
+    /**
+     * Session runtime name, when known.
+     */
+    session_name?: string;
+    /**
+     * Session template, when known.
+     */
+    template?: string;
+    /**
+     * Reset time the cleared hold had recorded (RFC3339 UTC), when known.
+     */
+    until?: string;
+};
+
+export type SessionProviderLimitedPayload = {
+    /**
+     * Provider the session runs, when known.
+     */
+    provider?: string;
+    /**
+     * Session bead ID.
+     */
+    session_id: string;
+    /**
+     * Session runtime name, when known.
+     */
+    session_name?: string;
+    /**
+     * Session template, when known.
+     */
+    template?: string;
+    /**
+     * Reset time the provider stated (RFC3339 UTC); empty when the hold text named no parseable reset.
+     */
+    until?: string;
+};
+
 /**
  * Session raw transcript frame
  *
@@ -5738,6 +5788,10 @@ export type TypedEventStreamEnvelope = ({
 } & TypedEventStreamEnvelopeSessionPendingCleared) | ({
     type: 'session.pool_slot_retired_at_drain_deadline';
 } & TypedEventStreamEnvelopeSessionPoolSlotRetiredAtDrainDeadline) | ({
+    type: 'session.provider_limit_cleared';
+} & TypedEventStreamEnvelopeSessionProviderLimitCleared) | ({
+    type: 'session.provider_limited';
+} & TypedEventStreamEnvelopeSessionProviderLimited) | ({
     type: 'session.quarantined';
 } & TypedEventStreamEnvelopeSessionQuarantined) | ({
     type: 'session.reset_stalled';
@@ -7266,6 +7320,42 @@ export type TypedEventStreamEnvelopeSessionPoolSlotRetiredAtDrainDeadline = {
 };
 
 /**
+ * TypedEventStreamEnvelope session.provider_limit_cleared
+ */
+export type TypedEventStreamEnvelopeSessionProviderLimitCleared = {
+    actor: string;
+    depends_on_step_ids?: Array<string>;
+    message?: string;
+    payload: SessionProviderLimitClearedPayload;
+    run_id?: string;
+    seq: number;
+    session_id?: string;
+    step_id?: string;
+    subject?: string;
+    ts: string;
+    type: 'session.provider_limit_cleared';
+    workflow?: WorkflowEventProjection;
+};
+
+/**
+ * TypedEventStreamEnvelope session.provider_limited
+ */
+export type TypedEventStreamEnvelopeSessionProviderLimited = {
+    actor: string;
+    depends_on_step_ids?: Array<string>;
+    message?: string;
+    payload: SessionProviderLimitedPayload;
+    run_id?: string;
+    seq: number;
+    session_id?: string;
+    step_id?: string;
+    subject?: string;
+    ts: string;
+    type: 'session.provider_limited';
+    workflow?: WorkflowEventProjection;
+};
+
+/**
  * TypedEventStreamEnvelope session.quarantined
  */
 export type TypedEventStreamEnvelopeSessionQuarantined = {
@@ -7865,6 +7955,10 @@ export type TypedTaggedEventStreamEnvelope = ({
 } & TypedTaggedEventStreamEnvelopeSessionPendingCleared) | ({
     type: 'session.pool_slot_retired_at_drain_deadline';
 } & TypedTaggedEventStreamEnvelopeSessionPoolSlotRetiredAtDrainDeadline) | ({
+    type: 'session.provider_limit_cleared';
+} & TypedTaggedEventStreamEnvelopeSessionProviderLimitCleared) | ({
+    type: 'session.provider_limited';
+} & TypedTaggedEventStreamEnvelopeSessionProviderLimited) | ({
     type: 'session.quarantined';
 } & TypedTaggedEventStreamEnvelopeSessionQuarantined) | ({
     type: 'session.reset_stalled';
@@ -9471,6 +9565,44 @@ export type TypedTaggedEventStreamEnvelopeSessionPoolSlotRetiredAtDrainDeadline 
     subject?: string;
     ts: string;
     type: 'session.pool_slot_retired_at_drain_deadline';
+    workflow?: WorkflowEventProjection;
+};
+
+/**
+ * TypedTaggedEventStreamEnvelope session.provider_limit_cleared
+ */
+export type TypedTaggedEventStreamEnvelopeSessionProviderLimitCleared = {
+    actor: string;
+    city: string;
+    depends_on_step_ids?: Array<string>;
+    message?: string;
+    payload: SessionProviderLimitClearedPayload;
+    run_id?: string;
+    seq: number;
+    session_id?: string;
+    step_id?: string;
+    subject?: string;
+    ts: string;
+    type: 'session.provider_limit_cleared';
+    workflow?: WorkflowEventProjection;
+};
+
+/**
+ * TypedTaggedEventStreamEnvelope session.provider_limited
+ */
+export type TypedTaggedEventStreamEnvelopeSessionProviderLimited = {
+    actor: string;
+    city: string;
+    depends_on_step_ids?: Array<string>;
+    message?: string;
+    payload: SessionProviderLimitedPayload;
+    run_id?: string;
+    seq: number;
+    session_id?: string;
+    step_id?: string;
+    subject?: string;
+    ts: string;
+    type: 'session.provider_limited';
     workflow?: WorkflowEventProjection;
 };
 

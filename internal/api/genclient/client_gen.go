@@ -257,19 +257,37 @@ func (e RunStepStatus) Valid() bool {
 
 // Defines values for SessionPendingClearedPayloadReason.
 const (
-	Replaced    SessionPendingClearedPayloadReason = "replaced"
-	Resolved    SessionPendingClearedPayloadReason = "resolved"
-	SessionGone SessionPendingClearedPayloadReason = "session_gone"
+	SessionPendingClearedPayloadReasonReplaced    SessionPendingClearedPayloadReason = "replaced"
+	SessionPendingClearedPayloadReasonResolved    SessionPendingClearedPayloadReason = "resolved"
+	SessionPendingClearedPayloadReasonSessionGone SessionPendingClearedPayloadReason = "session_gone"
 )
 
 // Valid indicates whether the value is a known member of the SessionPendingClearedPayloadReason enum.
 func (e SessionPendingClearedPayloadReason) Valid() bool {
 	switch e {
-	case Replaced:
+	case SessionPendingClearedPayloadReasonReplaced:
 		return true
-	case Resolved:
+	case SessionPendingClearedPayloadReasonResolved:
 		return true
-	case SessionGone:
+	case SessionPendingClearedPayloadReasonSessionGone:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SessionProviderLimitClearedPayloadReason.
+const (
+	SessionProviderLimitClearedPayloadReasonResumed     SessionProviderLimitClearedPayloadReason = "resumed"
+	SessionProviderLimitClearedPayloadReasonSessionGone SessionProviderLimitClearedPayloadReason = "session_gone"
+)
+
+// Valid indicates whether the value is a known member of the SessionProviderLimitClearedPayloadReason enum.
+func (e SessionProviderLimitClearedPayloadReason) Valid() bool {
+	switch e {
+	case SessionProviderLimitClearedPayloadReasonResumed:
+		return true
+	case SessionProviderLimitClearedPayloadReasonSessionGone:
 		return true
 	default:
 		return false
@@ -3928,6 +3946,48 @@ type SessionPoolSlotRetiredAtDrainDeadlinePayload struct {
 	Template *string `json:"template,omitempty"`
 }
 
+// SessionProviderLimitClearedPayload defines model for SessionProviderLimitClearedPayload.
+type SessionProviderLimitClearedPayload struct {
+	// Provider Provider the session runs, when known.
+	Provider *string `json:"provider,omitempty"`
+
+	// Reason Why it cleared: resumed (the live session no longer shows the hold) or session_gone (the session stopped while parked).
+	Reason SessionProviderLimitClearedPayloadReason `json:"reason"`
+
+	// SessionId Session bead ID from the matching session.provider_limited.
+	SessionId string `json:"session_id"`
+
+	// SessionName Session runtime name, when known.
+	SessionName *string `json:"session_name,omitempty"`
+
+	// Template Session template, when known.
+	Template *string `json:"template,omitempty"`
+
+	// Until Reset time the cleared hold had recorded (RFC3339 UTC), when known.
+	Until *string `json:"until,omitempty"`
+}
+
+// SessionProviderLimitClearedPayloadReason Why it cleared: resumed (the live session no longer shows the hold) or session_gone (the session stopped while parked).
+type SessionProviderLimitClearedPayloadReason string
+
+// SessionProviderLimitedPayload defines model for SessionProviderLimitedPayload.
+type SessionProviderLimitedPayload struct {
+	// Provider Provider the session runs, when known.
+	Provider *string `json:"provider,omitempty"`
+
+	// SessionId Session bead ID.
+	SessionId string `json:"session_id"`
+
+	// SessionName Session runtime name, when known.
+	SessionName *string `json:"session_name,omitempty"`
+
+	// Template Session template, when known.
+	Template *string `json:"template,omitempty"`
+
+	// Until Reset time the provider stated (RFC3339 UTC); empty when the hold text named no parseable reset.
+	Until *string `json:"until,omitempty"`
+}
+
 // SessionRawMessageFrame Provider-native transcript frame. Gas City forwards the exact JSON the provider wrote to its session log, so the shape is provider-specific and can be any JSON value. The producing provider is identified by the Provider field on the enclosing envelope; consumers dispatch per-provider frame parsing keyed by that identifier.
 type SessionRawMessageFrame = interface{}
 
@@ -6992,6 +7052,38 @@ type TypedEventStreamEnvelopeSessionPoolSlotRetiredAtDrainDeadline struct {
 	Workflow         *WorkflowEventProjection                     `json:"workflow,omitempty"`
 }
 
+// TypedEventStreamEnvelopeSessionProviderLimitCleared defines model for TypedEventStreamEnvelopeSessionProviderLimitCleared.
+type TypedEventStreamEnvelopeSessionProviderLimitCleared struct {
+	Actor            string                             `json:"actor"`
+	DependsOnStepIds *[]string                          `json:"depends_on_step_ids,omitempty"`
+	Message          *string                            `json:"message,omitempty"`
+	Payload          SessionProviderLimitClearedPayload `json:"payload"`
+	RunId            *string                            `json:"run_id,omitempty"`
+	Seq              int64                              `json:"seq"`
+	SessionId        *string                            `json:"session_id,omitempty"`
+	StepId           *string                            `json:"step_id,omitempty"`
+	Subject          *string                            `json:"subject,omitempty"`
+	Ts               time.Time                          `json:"ts"`
+	Type             string                             `json:"type"`
+	Workflow         *WorkflowEventProjection           `json:"workflow,omitempty"`
+}
+
+// TypedEventStreamEnvelopeSessionProviderLimited defines model for TypedEventStreamEnvelopeSessionProviderLimited.
+type TypedEventStreamEnvelopeSessionProviderLimited struct {
+	Actor            string                        `json:"actor"`
+	DependsOnStepIds *[]string                     `json:"depends_on_step_ids,omitempty"`
+	Message          *string                       `json:"message,omitempty"`
+	Payload          SessionProviderLimitedPayload `json:"payload"`
+	RunId            *string                       `json:"run_id,omitempty"`
+	Seq              int64                         `json:"seq"`
+	SessionId        *string                       `json:"session_id,omitempty"`
+	StepId           *string                       `json:"step_id,omitempty"`
+	Subject          *string                       `json:"subject,omitempty"`
+	Ts               time.Time                     `json:"ts"`
+	Type             string                        `json:"type"`
+	Workflow         *WorkflowEventProjection      `json:"workflow,omitempty"`
+}
+
 // TypedEventStreamEnvelopeSessionQuarantined defines model for TypedEventStreamEnvelopeSessionQuarantined.
 type TypedEventStreamEnvelopeSessionQuarantined struct {
 	Actor            string                   `json:"actor"`
@@ -8773,6 +8865,40 @@ type TypedTaggedEventStreamEnvelopeSessionPoolSlotRetiredAtDrainDeadline struct 
 	Ts               time.Time                                    `json:"ts"`
 	Type             string                                       `json:"type"`
 	Workflow         *WorkflowEventProjection                     `json:"workflow,omitempty"`
+}
+
+// TypedTaggedEventStreamEnvelopeSessionProviderLimitCleared defines model for TypedTaggedEventStreamEnvelopeSessionProviderLimitCleared.
+type TypedTaggedEventStreamEnvelopeSessionProviderLimitCleared struct {
+	Actor            string                             `json:"actor"`
+	City             string                             `json:"city"`
+	DependsOnStepIds *[]string                          `json:"depends_on_step_ids,omitempty"`
+	Message          *string                            `json:"message,omitempty"`
+	Payload          SessionProviderLimitClearedPayload `json:"payload"`
+	RunId            *string                            `json:"run_id,omitempty"`
+	Seq              int64                              `json:"seq"`
+	SessionId        *string                            `json:"session_id,omitempty"`
+	StepId           *string                            `json:"step_id,omitempty"`
+	Subject          *string                            `json:"subject,omitempty"`
+	Ts               time.Time                          `json:"ts"`
+	Type             string                             `json:"type"`
+	Workflow         *WorkflowEventProjection           `json:"workflow,omitempty"`
+}
+
+// TypedTaggedEventStreamEnvelopeSessionProviderLimited defines model for TypedTaggedEventStreamEnvelopeSessionProviderLimited.
+type TypedTaggedEventStreamEnvelopeSessionProviderLimited struct {
+	Actor            string                        `json:"actor"`
+	City             string                        `json:"city"`
+	DependsOnStepIds *[]string                     `json:"depends_on_step_ids,omitempty"`
+	Message          *string                       `json:"message,omitempty"`
+	Payload          SessionProviderLimitedPayload `json:"payload"`
+	RunId            *string                       `json:"run_id,omitempty"`
+	Seq              int64                         `json:"seq"`
+	SessionId        *string                       `json:"session_id,omitempty"`
+	StepId           *string                       `json:"step_id,omitempty"`
+	Subject          *string                       `json:"subject,omitempty"`
+	Ts               time.Time                     `json:"ts"`
+	Type             string                        `json:"type"`
+	Workflow         *WorkflowEventProjection      `json:"workflow,omitempty"`
 }
 
 // TypedTaggedEventStreamEnvelopeSessionQuarantined defines model for TypedTaggedEventStreamEnvelopeSessionQuarantined.
@@ -11890,6 +12016,58 @@ func (t *EventPayload) FromSessionPoolSlotRetiredAtDrainDeadlinePayload(v Sessio
 
 // MergeSessionPoolSlotRetiredAtDrainDeadlinePayload performs a merge with any union data inside the EventPayload, using the provided SessionPoolSlotRetiredAtDrainDeadlinePayload
 func (t *EventPayload) MergeSessionPoolSlotRetiredAtDrainDeadlinePayload(v SessionPoolSlotRetiredAtDrainDeadlinePayload) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsSessionProviderLimitClearedPayload returns the union data inside the EventPayload as a SessionProviderLimitClearedPayload
+func (t EventPayload) AsSessionProviderLimitClearedPayload() (SessionProviderLimitClearedPayload, error) {
+	var body SessionProviderLimitClearedPayload
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSessionProviderLimitClearedPayload overwrites any union data inside the EventPayload as the provided SessionProviderLimitClearedPayload
+func (t *EventPayload) FromSessionProviderLimitClearedPayload(v SessionProviderLimitClearedPayload) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeSessionProviderLimitClearedPayload performs a merge with any union data inside the EventPayload, using the provided SessionProviderLimitClearedPayload
+func (t *EventPayload) MergeSessionProviderLimitClearedPayload(v SessionProviderLimitClearedPayload) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsSessionProviderLimitedPayload returns the union data inside the EventPayload as a SessionProviderLimitedPayload
+func (t EventPayload) AsSessionProviderLimitedPayload() (SessionProviderLimitedPayload, error) {
+	var body SessionProviderLimitedPayload
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSessionProviderLimitedPayload overwrites any union data inside the EventPayload as the provided SessionProviderLimitedPayload
+func (t *EventPayload) FromSessionProviderLimitedPayload(v SessionProviderLimitedPayload) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeSessionProviderLimitedPayload performs a merge with any union data inside the EventPayload, using the provided SessionProviderLimitedPayload
+func (t *EventPayload) MergeSessionProviderLimitedPayload(v SessionProviderLimitedPayload) error {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -16337,6 +16515,62 @@ func (t *TypedEventStreamEnvelope) MergeTypedEventStreamEnvelopeSessionPoolSlotR
 	return err
 }
 
+// AsTypedEventStreamEnvelopeSessionProviderLimitCleared returns the union data inside the TypedEventStreamEnvelope as a TypedEventStreamEnvelopeSessionProviderLimitCleared
+func (t TypedEventStreamEnvelope) AsTypedEventStreamEnvelopeSessionProviderLimitCleared() (TypedEventStreamEnvelopeSessionProviderLimitCleared, error) {
+	var body TypedEventStreamEnvelopeSessionProviderLimitCleared
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromTypedEventStreamEnvelopeSessionProviderLimitCleared overwrites any union data inside the TypedEventStreamEnvelope as the provided TypedEventStreamEnvelopeSessionProviderLimitCleared
+func (t *TypedEventStreamEnvelope) FromTypedEventStreamEnvelopeSessionProviderLimitCleared(v TypedEventStreamEnvelopeSessionProviderLimitCleared) error {
+	v.Type = "session.provider_limit_cleared"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeTypedEventStreamEnvelopeSessionProviderLimitCleared performs a merge with any union data inside the TypedEventStreamEnvelope, using the provided TypedEventStreamEnvelopeSessionProviderLimitCleared
+func (t *TypedEventStreamEnvelope) MergeTypedEventStreamEnvelopeSessionProviderLimitCleared(v TypedEventStreamEnvelopeSessionProviderLimitCleared) error {
+	v.Type = "session.provider_limit_cleared"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsTypedEventStreamEnvelopeSessionProviderLimited returns the union data inside the TypedEventStreamEnvelope as a TypedEventStreamEnvelopeSessionProviderLimited
+func (t TypedEventStreamEnvelope) AsTypedEventStreamEnvelopeSessionProviderLimited() (TypedEventStreamEnvelopeSessionProviderLimited, error) {
+	var body TypedEventStreamEnvelopeSessionProviderLimited
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromTypedEventStreamEnvelopeSessionProviderLimited overwrites any union data inside the TypedEventStreamEnvelope as the provided TypedEventStreamEnvelopeSessionProviderLimited
+func (t *TypedEventStreamEnvelope) FromTypedEventStreamEnvelopeSessionProviderLimited(v TypedEventStreamEnvelopeSessionProviderLimited) error {
+	v.Type = "session.provider_limited"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeTypedEventStreamEnvelopeSessionProviderLimited performs a merge with any union data inside the TypedEventStreamEnvelope, using the provided TypedEventStreamEnvelopeSessionProviderLimited
+func (t *TypedEventStreamEnvelope) MergeTypedEventStreamEnvelopeSessionProviderLimited(v TypedEventStreamEnvelopeSessionProviderLimited) error {
+	v.Type = "session.provider_limited"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 // AsTypedEventStreamEnvelopeSessionQuarantined returns the union data inside the TypedEventStreamEnvelope as a TypedEventStreamEnvelopeSessionQuarantined
 func (t TypedEventStreamEnvelope) AsTypedEventStreamEnvelopeSessionQuarantined() (TypedEventStreamEnvelopeSessionQuarantined, error) {
 	var body TypedEventStreamEnvelopeSessionQuarantined
@@ -17215,6 +17449,10 @@ func (t TypedEventStreamEnvelope) ValueByDiscriminator() (interface{}, error) {
 		return t.AsTypedEventStreamEnvelopeSessionPendingCleared()
 	case "session.pool_slot_retired_at_drain_deadline":
 		return t.AsTypedEventStreamEnvelopeSessionPoolSlotRetiredAtDrainDeadline()
+	case "session.provider_limit_cleared":
+		return t.AsTypedEventStreamEnvelopeSessionProviderLimitCleared()
+	case "session.provider_limited":
+		return t.AsTypedEventStreamEnvelopeSessionProviderLimited()
 	case "session.quarantined":
 		return t.AsTypedEventStreamEnvelopeSessionQuarantined()
 	case "session.reset_stalled":
@@ -19546,6 +19784,62 @@ func (t *TypedTaggedEventStreamEnvelope) MergeTypedTaggedEventStreamEnvelopeSess
 	return err
 }
 
+// AsTypedTaggedEventStreamEnvelopeSessionProviderLimitCleared returns the union data inside the TypedTaggedEventStreamEnvelope as a TypedTaggedEventStreamEnvelopeSessionProviderLimitCleared
+func (t TypedTaggedEventStreamEnvelope) AsTypedTaggedEventStreamEnvelopeSessionProviderLimitCleared() (TypedTaggedEventStreamEnvelopeSessionProviderLimitCleared, error) {
+	var body TypedTaggedEventStreamEnvelopeSessionProviderLimitCleared
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromTypedTaggedEventStreamEnvelopeSessionProviderLimitCleared overwrites any union data inside the TypedTaggedEventStreamEnvelope as the provided TypedTaggedEventStreamEnvelopeSessionProviderLimitCleared
+func (t *TypedTaggedEventStreamEnvelope) FromTypedTaggedEventStreamEnvelopeSessionProviderLimitCleared(v TypedTaggedEventStreamEnvelopeSessionProviderLimitCleared) error {
+	v.Type = "session.provider_limit_cleared"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeTypedTaggedEventStreamEnvelopeSessionProviderLimitCleared performs a merge with any union data inside the TypedTaggedEventStreamEnvelope, using the provided TypedTaggedEventStreamEnvelopeSessionProviderLimitCleared
+func (t *TypedTaggedEventStreamEnvelope) MergeTypedTaggedEventStreamEnvelopeSessionProviderLimitCleared(v TypedTaggedEventStreamEnvelopeSessionProviderLimitCleared) error {
+	v.Type = "session.provider_limit_cleared"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsTypedTaggedEventStreamEnvelopeSessionProviderLimited returns the union data inside the TypedTaggedEventStreamEnvelope as a TypedTaggedEventStreamEnvelopeSessionProviderLimited
+func (t TypedTaggedEventStreamEnvelope) AsTypedTaggedEventStreamEnvelopeSessionProviderLimited() (TypedTaggedEventStreamEnvelopeSessionProviderLimited, error) {
+	var body TypedTaggedEventStreamEnvelopeSessionProviderLimited
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromTypedTaggedEventStreamEnvelopeSessionProviderLimited overwrites any union data inside the TypedTaggedEventStreamEnvelope as the provided TypedTaggedEventStreamEnvelopeSessionProviderLimited
+func (t *TypedTaggedEventStreamEnvelope) FromTypedTaggedEventStreamEnvelopeSessionProviderLimited(v TypedTaggedEventStreamEnvelopeSessionProviderLimited) error {
+	v.Type = "session.provider_limited"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeTypedTaggedEventStreamEnvelopeSessionProviderLimited performs a merge with any union data inside the TypedTaggedEventStreamEnvelope, using the provided TypedTaggedEventStreamEnvelopeSessionProviderLimited
+func (t *TypedTaggedEventStreamEnvelope) MergeTypedTaggedEventStreamEnvelopeSessionProviderLimited(v TypedTaggedEventStreamEnvelopeSessionProviderLimited) error {
+	v.Type = "session.provider_limited"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 // AsTypedTaggedEventStreamEnvelopeSessionQuarantined returns the union data inside the TypedTaggedEventStreamEnvelope as a TypedTaggedEventStreamEnvelopeSessionQuarantined
 func (t TypedTaggedEventStreamEnvelope) AsTypedTaggedEventStreamEnvelopeSessionQuarantined() (TypedTaggedEventStreamEnvelopeSessionQuarantined, error) {
 	var body TypedTaggedEventStreamEnvelopeSessionQuarantined
@@ -20424,6 +20718,10 @@ func (t TypedTaggedEventStreamEnvelope) ValueByDiscriminator() (interface{}, err
 		return t.AsTypedTaggedEventStreamEnvelopeSessionPendingCleared()
 	case "session.pool_slot_retired_at_drain_deadline":
 		return t.AsTypedTaggedEventStreamEnvelopeSessionPoolSlotRetiredAtDrainDeadline()
+	case "session.provider_limit_cleared":
+		return t.AsTypedTaggedEventStreamEnvelopeSessionProviderLimitCleared()
+	case "session.provider_limited":
+		return t.AsTypedTaggedEventStreamEnvelopeSessionProviderLimited()
 	case "session.quarantined":
 		return t.AsTypedTaggedEventStreamEnvelopeSessionQuarantined()
 	case "session.reset_stalled":

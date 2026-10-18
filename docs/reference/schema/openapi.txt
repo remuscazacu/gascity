@@ -2775,6 +2775,12 @@
             "$ref": "#/components/schemas/SessionPoolSlotRetiredAtDrainDeadlinePayload"
           },
           {
+            "$ref": "#/components/schemas/SessionProviderLimitClearedPayload"
+          },
+          {
+            "$ref": "#/components/schemas/SessionProviderLimitedPayload"
+          },
+          {
             "$ref": "#/components/schemas/SessionResetStalledPayload"
           },
           {
@@ -8081,6 +8087,73 @@
         ],
         "type": "object"
       },
+      "SessionProviderLimitClearedPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "provider": {
+            "description": "Provider the session runs, when known.",
+            "type": "string"
+          },
+          "reason": {
+            "description": "Why it cleared: resumed (the live session no longer shows the hold) or session_gone (the session stopped while parked).",
+            "enum": [
+              "resumed",
+              "session_gone"
+            ],
+            "type": "string"
+          },
+          "session_id": {
+            "description": "Session bead ID from the matching session.provider_limited.",
+            "type": "string"
+          },
+          "session_name": {
+            "description": "Session runtime name, when known.",
+            "type": "string"
+          },
+          "template": {
+            "description": "Session template, when known.",
+            "type": "string"
+          },
+          "until": {
+            "description": "Reset time the cleared hold had recorded (RFC3339 UTC), when known.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "SessionProviderLimitedPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "provider": {
+            "description": "Provider the session runs, when known.",
+            "type": "string"
+          },
+          "session_id": {
+            "description": "Session bead ID.",
+            "type": "string"
+          },
+          "session_name": {
+            "description": "Session runtime name, when known.",
+            "type": "string"
+          },
+          "template": {
+            "description": "Session template, when known.",
+            "type": "string"
+          },
+          "until": {
+            "description": "Reset time the provider stated (RFC3339 UTC); empty when the hold text named no parseable reset.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id"
+        ],
+        "type": "object"
+      },
       "SessionRawMessageFrame": {
         "description": "Provider-native transcript frame. Gas City forwards the exact JSON the provider wrote to its session log, so the shape is provider-specific and can be any JSON value. The producing provider is identified by the Provider field on the enclosing envelope; consumers dispatch per-provider frame parsing keyed by that identifier.",
         "title": "Session raw transcript frame"
@@ -12977,6 +13050,8 @@
             "session.pending": "#/components/schemas/TypedEventStreamEnvelopeSessionPending",
             "session.pending_cleared": "#/components/schemas/TypedEventStreamEnvelopeSessionPendingCleared",
             "session.pool_slot_retired_at_drain_deadline": "#/components/schemas/TypedEventStreamEnvelopeSessionPoolSlotRetiredAtDrainDeadline",
+            "session.provider_limit_cleared": "#/components/schemas/TypedEventStreamEnvelopeSessionProviderLimitCleared",
+            "session.provider_limited": "#/components/schemas/TypedEventStreamEnvelopeSessionProviderLimited",
             "session.quarantined": "#/components/schemas/TypedEventStreamEnvelopeSessionQuarantined",
             "session.reset_stalled": "#/components/schemas/TypedEventStreamEnvelopeSessionResetStalled",
             "session.stopped": "#/components/schemas/TypedEventStreamEnvelopeSessionStopped",
@@ -13247,6 +13322,12 @@
           },
           {
             "$ref": "#/components/schemas/TypedEventStreamEnvelopeSessionPoolSlotRetiredAtDrainDeadline"
+          },
+          {
+            "$ref": "#/components/schemas/TypedEventStreamEnvelopeSessionProviderLimitCleared"
+          },
+          {
+            "$ref": "#/components/schemas/TypedEventStreamEnvelopeSessionProviderLimited"
           },
           {
             "$ref": "#/components/schemas/TypedEventStreamEnvelopeSessionQuarantined"
@@ -14701,6 +14782,8 @@
                 "session.cold_start_timeout",
                 "session.pending",
                 "session.pending_cleared",
+                "session.provider_limited",
+                "session.provider_limit_cleared",
                 "bead.created",
                 "bead.closed",
                 "bead.deleted",
@@ -18106,6 +18189,120 @@
         "title": "TypedEventStreamEnvelope session.pool_slot_retired_at_drain_deadline",
         "type": "object"
       },
+      "TypedEventStreamEnvelopeSessionProviderLimitCleared": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "depends_on_step_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "message": {
+            "type": "string"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/SessionProviderLimitClearedPayload"
+          },
+          "run_id": {
+            "type": "string"
+          },
+          "seq": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "session_id": {
+            "type": "string"
+          },
+          "step_id": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "type": {
+            "const": "session.provider_limit_cleared",
+            "type": "string"
+          },
+          "workflow": {
+            "$ref": "#/components/schemas/WorkflowEventProjection"
+          }
+        },
+        "required": [
+          "seq",
+          "type",
+          "ts",
+          "actor",
+          "payload"
+        ],
+        "title": "TypedEventStreamEnvelope session.provider_limit_cleared",
+        "type": "object"
+      },
+      "TypedEventStreamEnvelopeSessionProviderLimited": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "depends_on_step_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "message": {
+            "type": "string"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/SessionProviderLimitedPayload"
+          },
+          "run_id": {
+            "type": "string"
+          },
+          "seq": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "session_id": {
+            "type": "string"
+          },
+          "step_id": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "type": {
+            "const": "session.provider_limited",
+            "type": "string"
+          },
+          "workflow": {
+            "$ref": "#/components/schemas/WorkflowEventProjection"
+          }
+        },
+        "required": [
+          "seq",
+          "type",
+          "ts",
+          "actor",
+          "payload"
+        ],
+        "title": "TypedEventStreamEnvelope session.provider_limited",
+        "type": "object"
+      },
       "TypedEventStreamEnvelopeSessionQuarantined": {
         "additionalProperties": false,
         "properties": {
@@ -19559,6 +19756,8 @@
             "session.pending": "#/components/schemas/TypedTaggedEventStreamEnvelopeSessionPending",
             "session.pending_cleared": "#/components/schemas/TypedTaggedEventStreamEnvelopeSessionPendingCleared",
             "session.pool_slot_retired_at_drain_deadline": "#/components/schemas/TypedTaggedEventStreamEnvelopeSessionPoolSlotRetiredAtDrainDeadline",
+            "session.provider_limit_cleared": "#/components/schemas/TypedTaggedEventStreamEnvelopeSessionProviderLimitCleared",
+            "session.provider_limited": "#/components/schemas/TypedTaggedEventStreamEnvelopeSessionProviderLimited",
             "session.quarantined": "#/components/schemas/TypedTaggedEventStreamEnvelopeSessionQuarantined",
             "session.reset_stalled": "#/components/schemas/TypedTaggedEventStreamEnvelopeSessionResetStalled",
             "session.stopped": "#/components/schemas/TypedTaggedEventStreamEnvelopeSessionStopped",
@@ -19829,6 +20028,12 @@
           },
           {
             "$ref": "#/components/schemas/TypedTaggedEventStreamEnvelopeSessionPoolSlotRetiredAtDrainDeadline"
+          },
+          {
+            "$ref": "#/components/schemas/TypedTaggedEventStreamEnvelopeSessionProviderLimitCleared"
+          },
+          {
+            "$ref": "#/components/schemas/TypedTaggedEventStreamEnvelopeSessionProviderLimited"
           },
           {
             "$ref": "#/components/schemas/TypedTaggedEventStreamEnvelopeSessionQuarantined"
@@ -21378,6 +21583,8 @@
                 "session.cold_start_timeout",
                 "session.pending",
                 "session.pending_cleared",
+                "session.provider_limited",
+                "session.provider_limit_cleared",
                 "bead.created",
                 "bead.closed",
                 "bead.deleted",
@@ -25014,6 +25221,128 @@
           "city"
         ],
         "title": "TypedTaggedEventStreamEnvelope session.pool_slot_retired_at_drain_deadline",
+        "type": "object"
+      },
+      "TypedTaggedEventStreamEnvelopeSessionProviderLimitCleared": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "city": {
+            "type": "string"
+          },
+          "depends_on_step_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "message": {
+            "type": "string"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/SessionProviderLimitClearedPayload"
+          },
+          "run_id": {
+            "type": "string"
+          },
+          "seq": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "session_id": {
+            "type": "string"
+          },
+          "step_id": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "type": {
+            "const": "session.provider_limit_cleared",
+            "type": "string"
+          },
+          "workflow": {
+            "$ref": "#/components/schemas/WorkflowEventProjection"
+          }
+        },
+        "required": [
+          "seq",
+          "type",
+          "ts",
+          "actor",
+          "payload",
+          "city"
+        ],
+        "title": "TypedTaggedEventStreamEnvelope session.provider_limit_cleared",
+        "type": "object"
+      },
+      "TypedTaggedEventStreamEnvelopeSessionProviderLimited": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "city": {
+            "type": "string"
+          },
+          "depends_on_step_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "message": {
+            "type": "string"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/SessionProviderLimitedPayload"
+          },
+          "run_id": {
+            "type": "string"
+          },
+          "seq": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "session_id": {
+            "type": "string"
+          },
+          "step_id": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "type": {
+            "const": "session.provider_limited",
+            "type": "string"
+          },
+          "workflow": {
+            "$ref": "#/components/schemas/WorkflowEventProjection"
+          }
+        },
+        "required": [
+          "seq",
+          "type",
+          "ts",
+          "actor",
+          "payload",
+          "city"
+        ],
+        "title": "TypedTaggedEventStreamEnvelope session.provider_limited",
         "type": "object"
       },
       "TypedTaggedEventStreamEnvelopeSessionQuarantined": {

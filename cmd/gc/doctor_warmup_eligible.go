@@ -90,4 +90,8 @@ func (c *startupHealthEpisodesCheck) WarmupEligible() bool { return false }
 
 // WarmupEligible returns false; this check is not part of the
 // `gc start` warm-up scan.
+func (c *providerUsageLimitCheck) WarmupEligible() bool { return false }
+
+// WarmupEligible returns false; this check is not part of the
+// `gc start` warm-up scan.
 func (c *executorIdentityResidueCheck) WarmupEligible() bool { return false }

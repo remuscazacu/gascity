@@ -720,6 +720,48 @@ type SessionPendingClearedPayload struct {
 // IsEventPayload marks SessionPendingClearedPayload as an events.Payload variant.
 func (SessionPendingClearedPayload) IsEventPayload() {}
 
+// Reasons carried by SessionProviderLimitClearedPayload.Reason.
+const (
+	// ProviderLimitClearedResumed: the session is still live and its pane no
+	// longer shows the usage-limit hold — the window reset and it went back
+	// to work.
+	ProviderLimitClearedResumed = "resumed"
+	// ProviderLimitClearedSessionGone: the session stopped while parked; its
+	// record was dropped without a capture. It says nothing about whether the
+	// provider's limit has reset.
+	ProviderLimitClearedSessionGone = "session_gone"
+)
+
+// SessionProviderLimitedPayload is the typed payload for
+// session.provider_limited: a live session is parked on a provider
+// usage-limit hold. A provider limit is account-wide, so several of these
+// close together mean the whole provider is out, not one seat.
+type SessionProviderLimitedPayload struct {
+	SessionID   string `json:"session_id" doc:"Session bead ID."`
+	SessionName string `json:"session_name,omitempty" doc:"Session runtime name, when known."`
+	Template    string `json:"template,omitempty" doc:"Session template, when known."`
+	Provider    string `json:"provider,omitempty" doc:"Provider the session runs, when known."`
+	Until       string `json:"until,omitempty" doc:"Reset time the provider stated (RFC3339 UTC); empty when the hold text named no parseable reset."`
+}
+
+// IsEventPayload marks SessionProviderLimitedPayload as an events.Payload variant.
+func (SessionProviderLimitedPayload) IsEventPayload() {}
+
+// SessionProviderLimitClearedPayload is the typed payload for
+// session.provider_limit_cleared: the hold a previous session.provider_limited
+// announced is gone.
+type SessionProviderLimitClearedPayload struct {
+	SessionID   string `json:"session_id" doc:"Session bead ID from the matching session.provider_limited."`
+	SessionName string `json:"session_name,omitempty" doc:"Session runtime name, when known."`
+	Template    string `json:"template,omitempty" doc:"Session template, when known."`
+	Provider    string `json:"provider,omitempty" doc:"Provider the session runs, when known."`
+	Until       string `json:"until,omitempty" doc:"Reset time the cleared hold had recorded (RFC3339 UTC), when known."`
+	Reason      string `json:"reason" enum:"resumed,session_gone" doc:"Why it cleared: resumed (the live session no longer shows the hold) or session_gone (the session stopped while parked)."`
+}
+
+// IsEventPayload marks SessionProviderLimitClearedPayload as an events.Payload variant.
+func (SessionProviderLimitClearedPayload) IsEventPayload() {}
+
 // SessionWakeRefusedPayload is the typed payload for session.wake_refused: a
 // durable explicit wake request refused before the session reached a live
 // runtime (held, quarantined, or asleep past its idle-sleep window).
@@ -794,6 +836,8 @@ func init() {
 	events.RegisterPayload(events.SessionColdStartTimeout, events.NoPayload{})
 	events.RegisterPayload(events.SessionPending, SessionPendingPayload{})
 	events.RegisterPayload(events.SessionPendingCleared, SessionPendingClearedPayload{})
+	events.RegisterPayload(events.SessionProviderLimited, SessionProviderLimitedPayload{})
+	events.RegisterPayload(events.SessionProviderLimitCleared, SessionProviderLimitClearedPayload{})
 	events.RegisterPayload(events.ConvoyCreated, events.NoPayload{})
 	events.RegisterPayload(events.ConvoyClosed, events.NoPayload{})
 	events.RegisterPayload(events.ControllerStarted, events.NoPayload{})
