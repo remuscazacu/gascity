@@ -43,7 +43,12 @@ const usageLimitProbeInterval = time.Minute
 // nobody noticed for 7 hours. The event follows the write, never precedes it:
 // a failed write leaves the bead as it was, the next probe retries the
 // transition, and that retry is the one that announces it.
-func observeProviderUsageLimit(info sessionpkg.Info, alive bool, peek func(lines int) (string, error), dt *drainTracker, sessFront *sessionpkg.Store, rec events.Recorder, clk clock.Clock, stderr io.Writer) sessionpkg.Info {
+//
+// The same two transitions feed the city's durable provider-limit ledger
+// (sr-896w): a hold with a known reset widens the provider's recorded hold,
+// and a live session seen leaving its hold lifts it. A session that merely
+// stopped while parked lifts nothing: it says nothing about the limit.
+func observeProviderUsageLimit(info sessionpkg.Info, alive bool, peek func(lines int) (string, error), dt *drainTracker, sessFront *sessionpkg.Store, rec events.Recorder, ledger providerLimitLedgerSink, clk clock.Clock, stderr io.Writer) sessionpkg.Info {
 	if sessFront == nil {
 		return info
 	}
@@ -82,10 +87,17 @@ func observeProviderUsageLimit(info sessionpkg.Info, alive bool, peek func(lines
 			Provider:    next.Provider,
 			Until:       strings.TrimSpace(next.ProviderLimitUntil),
 		}, fmt.Sprintf("%s is parked on a provider usage limit; resets %s", providerLimitEventName(next), resets), stderr)
+		if ledger != nil && ok {
+			ledger.held(next.Provider, until, now, next.ID)
+		}
 		return next
 	case !held && info.ProviderLimited():
 		fmt.Fprintf(stderr, "session reconciler: %s (%s) is no longer parked on a provider usage limit\n", info.SessionNameMetadata, info.ID) //nolint:errcheck
-		return clearProviderLimit(info, sessFront, rec, api.ProviderLimitClearedResumed, stderr)
+		next := clearProviderLimit(info, sessFront, rec, api.ProviderLimitClearedResumed, stderr)
+		if ledger != nil && !next.ProviderLimited() {
+			ledger.lifted(info.Provider)
+		}
+		return next
 	}
 	return info
 }

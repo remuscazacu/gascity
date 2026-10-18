@@ -809,7 +809,8 @@ func buildDesiredStateWithSessionBeadsAtOpts(
 		// A seat parked on pre-assigned blocked work stays desired but takes
 		// no cap headroom (ga-ylpbsy.16). A partial work read parks nothing.
 		parked := parkSeatsForDemand(cfg, [][]session.Info{sessionBeads.OpenInfos()}, assignedWorkBeads, assignedWorkStoreRefs, readyAssigned, storePartial, poolDecisionTime.UTC())
-		bp.providerLimitHolds = providerLimitHolds(sessionBeads.OpenInfos(), poolDecisionTime)
+		bp.providerLimitHolds = mergeProviderLimitHolds(providerLimitHolds(sessionBeads.OpenInfos(), poolDecisionTime),
+			durableProviderLimitHolds(fsys.OSFS{}, cityPath, poolDecisionTime))
 		poolDesiredStates := computePoolDesiredStatesParkedAt(
 			cfg,
 			poolWorkBeads,

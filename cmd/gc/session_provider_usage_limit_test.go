@@ -52,7 +52,7 @@ func TestObserveProviderUsageLimit_RecordsHoldOnLiveSession(t *testing.T) {
 	var log bytes.Buffer
 
 	got := observeProviderUsageLimit(seedSessionInfo(session), true, staticPeek(readRuntimeUsageLimitFixture(t, "usage_limit_hold_claude_opus.txt"), nil),
-		newDrainTracker(), sessionFrontDoor(store), nil, clk, &log)
+		newDrainTracker(), sessionFrontDoor(store), nil, nil, clk, &log)
 	syncBeadFromStore(&session, store)
 
 	if !got.ProviderLimited() {
@@ -84,7 +84,7 @@ func TestObserveProviderUsageLimit_ClearsWhenHoldEnds(t *testing.T) {
 	var log bytes.Buffer
 
 	got := observeProviderUsageLimit(seedSessionInfo(session), true, staticPeek(readRuntimeUsageLimitFixture(t, "usage_limit_cleared_claude_scrollback.txt"), nil),
-		newDrainTracker(), sessionFrontDoor(store), nil, clk, &log)
+		newDrainTracker(), sessionFrontDoor(store), nil, nil, clk, &log)
 	syncBeadFromStore(&session, store)
 
 	if got.ProviderLimited() || session.Metadata[sessionpkg.ProviderLimitSeenAtKey] != "" {
@@ -103,7 +103,7 @@ func TestObserveProviderUsageLimit_DeadSessionClearsWithoutPeek(t *testing.T) {
 	session := makeBead("b1", map[string]string{sessionpkg.ProviderLimitSeenAtKey: "2026-10-16T15:50:00Z"})
 	calls := 0
 
-	observeProviderUsageLimit(seedSessionInfo(session), false, staticPeek("", &calls), newDrainTracker(), sessionFrontDoor(store), nil, clk, &bytes.Buffer{})
+	observeProviderUsageLimit(seedSessionInfo(session), false, staticPeek("", &calls), newDrainTracker(), sessionFrontDoor(store), nil, nil, clk, &bytes.Buffer{})
 	syncBeadFromStore(&session, store)
 
 	if calls != 0 {
@@ -124,13 +124,13 @@ func TestObserveProviderUsageLimit_ThrottlesAndWritesOnlyOnTransition(t *testing
 	calls := 0
 	healthy := staticPeek(readRuntimeUsageLimitFixture(t, "usage_limit_none_claude_idle.txt"), &calls)
 
-	info := observeProviderUsageLimit(seedSessionInfo(session), true, healthy, dt, sessionFrontDoor(store), nil, clk, &bytes.Buffer{})
-	info = observeProviderUsageLimit(info, true, healthy, dt, sessionFrontDoor(store), nil, clk, &bytes.Buffer{})
+	info := observeProviderUsageLimit(seedSessionInfo(session), true, healthy, dt, sessionFrontDoor(store), nil, nil, clk, &bytes.Buffer{})
+	info = observeProviderUsageLimit(info, true, healthy, dt, sessionFrontDoor(store), nil, nil, clk, &bytes.Buffer{})
 	if calls != 1 {
 		t.Fatalf("captures within one interval = %d, want 1", calls)
 	}
 	clk.Time = now.Add(usageLimitProbeInterval)
-	observeProviderUsageLimit(info, true, healthy, dt, sessionFrontDoor(store), nil, clk, &bytes.Buffer{})
+	observeProviderUsageLimit(info, true, healthy, dt, sessionFrontDoor(store), nil, nil, clk, &bytes.Buffer{})
 	if calls != 2 {
 		t.Fatalf("captures after the interval = %d, want 2", calls)
 	}
@@ -146,7 +146,7 @@ func TestObserveProviderUsageLimit_PeekErrorChangesNothing(t *testing.T) {
 	session := makeBead("b1", map[string]string{sessionpkg.ProviderLimitSeenAtKey: "2026-10-16T15:50:00Z"})
 	failing := func(int) (string, error) { return "", errors.New("capture failed") }
 
-	got := observeProviderUsageLimit(seedSessionInfo(session), true, failing, newDrainTracker(), sessionFrontDoor(store), nil, clk, &bytes.Buffer{})
+	got := observeProviderUsageLimit(seedSessionInfo(session), true, failing, newDrainTracker(), sessionFrontDoor(store), nil, nil, clk, &bytes.Buffer{})
 	if !got.ProviderLimited() {
 		t.Error("a failed capture cleared a recorded hold")
 	}
@@ -160,7 +160,7 @@ func TestObserveProviderUsageLimit_EmptyCaptureChangesNothing(t *testing.T) {
 	session := makeBead("b1", map[string]string{sessionpkg.ProviderLimitSeenAtKey: "2026-10-16T15:50:00Z"})
 	var log bytes.Buffer
 
-	got := observeProviderUsageLimit(seedSessionInfo(session), true, staticPeek("  \n\n", nil), newDrainTracker(), sessionFrontDoor(store), nil, clk, &log)
+	got := observeProviderUsageLimit(seedSessionInfo(session), true, staticPeek("  \n\n", nil), newDrainTracker(), sessionFrontDoor(store), nil, nil, clk, &log)
 	syncBeadFromStore(&session, store)
 	if !got.ProviderLimited() || session.Metadata[sessionpkg.ProviderLimitSeenAtKey] == "" {
 		t.Error("an empty capture cleared a recorded hold")
@@ -193,10 +193,10 @@ func TestObserveProviderUsageLimit_EmitsLimitedOncePerTransition(t *testing.T) {
 	rec := events.NewFake()
 	held := staticPeek(readRuntimeUsageLimitFixture(t, "usage_limit_hold_claude_opus.txt"), nil)
 
-	info := observeProviderUsageLimit(seedSessionInfo(session), true, held, dt, sessionFrontDoor(store), rec, clk, &bytes.Buffer{})
+	info := observeProviderUsageLimit(seedSessionInfo(session), true, held, dt, sessionFrontDoor(store), rec, nil, clk, &bytes.Buffer{})
 	for i := 1; i <= 3; i++ {
 		clk.Time = now.Add(time.Duration(i) * usageLimitProbeInterval)
-		info = observeProviderUsageLimit(info, true, held, dt, sessionFrontDoor(store), rec, clk, &bytes.Buffer{})
+		info = observeProviderUsageLimit(info, true, held, dt, sessionFrontDoor(store), rec, nil, clk, &bytes.Buffer{})
 	}
 
 	got := providerLimitEvents(rec)
@@ -231,7 +231,7 @@ func TestObserveProviderUsageLimit_EmitsClearedResumed(t *testing.T) {
 	rec := events.NewFake()
 
 	observeProviderUsageLimit(seedSessionInfo(session), true, staticPeek(readRuntimeUsageLimitFixture(t, "usage_limit_cleared_claude_scrollback.txt"), nil),
-		newDrainTracker(), sessionFrontDoor(store), rec, clk, &bytes.Buffer{})
+		newDrainTracker(), sessionFrontDoor(store), rec, nil, clk, &bytes.Buffer{})
 
 	got := providerLimitEvents(rec)
 	if len(got) != 1 || got[0].Type != events.SessionProviderLimitCleared {
@@ -258,7 +258,7 @@ func TestObserveProviderUsageLimit_EmitsClearedSessionGone(t *testing.T) {
 	})
 	rec := events.NewFake()
 
-	observeProviderUsageLimit(seedSessionInfo(session), false, staticPeek("", nil), newDrainTracker(), sessionFrontDoor(store), rec, clk, &bytes.Buffer{})
+	observeProviderUsageLimit(seedSessionInfo(session), false, staticPeek("", nil), newDrainTracker(), sessionFrontDoor(store), rec, nil, clk, &bytes.Buffer{})
 
 	got := providerLimitEvents(rec)
 	if len(got) != 1 || got[0].Type != events.SessionProviderLimitCleared {
@@ -286,7 +286,7 @@ func TestObserveProviderUsageLimit_FailedWriteEmitsNothing(t *testing.T) {
 	rec := events.NewFake()
 	held := staticPeek(readRuntimeUsageLimitFixture(t, "usage_limit_hold_claude_opus.txt"), nil)
 
-	info := observeProviderUsageLimit(seedSessionInfo(session), true, held, dt, sessionFrontDoor(store), rec, clk, &bytes.Buffer{})
+	info := observeProviderUsageLimit(seedSessionInfo(session), true, held, dt, sessionFrontDoor(store), rec, nil, clk, &bytes.Buffer{})
 	if info.ProviderLimited() {
 		t.Fatal("a failed write advanced the snapshot")
 	}
@@ -296,7 +296,7 @@ func TestObserveProviderUsageLimit_FailedWriteEmitsNothing(t *testing.T) {
 
 	store.metadataBatchErr = nil
 	clk.Time = now.Add(usageLimitProbeInterval)
-	observeProviderUsageLimit(info, true, held, dt, sessionFrontDoor(store), rec, clk, &bytes.Buffer{})
+	observeProviderUsageLimit(info, true, held, dt, sessionFrontDoor(store), rec, nil, clk, &bytes.Buffer{})
 	if got := providerLimitEvents(rec); len(got) != 1 || got[0].Type != events.SessionProviderLimited {
 		t.Fatalf("retry events = %+v, want one %s", got, events.SessionProviderLimited)
 	}

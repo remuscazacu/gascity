@@ -9,6 +9,7 @@ import (
 	"github.com/gastownhall/gascity/internal/beads"
 	"github.com/gastownhall/gascity/internal/config"
 	"github.com/gastownhall/gascity/internal/doctor"
+	"github.com/gastownhall/gascity/internal/fsys"
 	"github.com/gastownhall/gascity/internal/session"
 )
 
@@ -28,15 +29,20 @@ import (
 // control-dispatcher runs gc, not the provider, so it is never limited and is
 // left out of both counts — counting it would make a total outage read as
 // 13/14 instead of 13/13.
+//
+// It also reads the city's durable provider-limit ledger (sr-896w). With every
+// parked seat gone the ledger still gates starts, and a check that counted
+// only live seats would read OK while gc refuses to start anything.
 type providerUsageLimitCheck struct {
 	cfg      *config.City
 	cityPath string
 	newStore func(string) (beads.Store, error)
+	fs       fsys.FS
 	now      func() time.Time
 }
 
 func newProviderUsageLimitCheck(cfg *config.City, cityPath string, newStore func(string) (beads.Store, error)) *providerUsageLimitCheck {
-	return &providerUsageLimitCheck{cfg: cfg, cityPath: cityPath, newStore: newStore, now: time.Now}
+	return &providerUsageLimitCheck{cfg: cfg, cityPath: cityPath, newStore: newStore, fs: fsys.OSFS{}, now: time.Now}
 }
 
 func (c *providerUsageLimitCheck) Name() string { return "provider-usage-limit" }
@@ -94,10 +100,19 @@ func (c *providerUsageLimitCheck) Run(_ *doctor.CheckContext) *doctor.CheckResul
 	}
 
 	limited := len(details)
-	if limited == 0 {
-		return okCheck(c.Name(), fmt.Sprintf("no live provider session is parked on a usage limit (%d live)", live))
-	}
 	sort.Strings(details)
+	recorded := c.recordedHolds(now)
+	if limited == 0 {
+		if len(recorded) == 0 {
+			return okCheck(c.Name(), fmt.Sprintf("no live provider session is parked on a usage limit (%d live)", live))
+		}
+		return warnCheck(c.Name(),
+			fmt.Sprintf("no live session is parked, but the city's recorded usage limit still holds %d provider(s); gc will not start their sessions until the reset", len(recorded)),
+			"the hold lifts on its own at the stated reset, when a live session is seen resuming, or on `gc resume`. "+
+				"If the limit is already lifted (plan upgraded), `gc resume` the city or remove "+providerLimitLedgerFile(c.cityPath)+".",
+			recorded)
+	}
+	details = append(details, recorded...)
 
 	msg := fmt.Sprintf("%d of %d live provider session(s) parked on a provider usage limit", limited, live)
 	if !latestReset.IsZero() {
@@ -118,4 +133,16 @@ func providerUsageLimitOr(v, fallback string) string {
 		return fallback
 	}
 	return v
+}
+
+// recordedHolds renders the durable ledger's live holds, one detail line each.
+func (c *providerUsageLimitCheck) recordedHolds(now time.Time) []string {
+	holds := durableProviderLimitHolds(c.fs, c.cityPath, now)
+	out := make([]string, 0, len(holds))
+	for provider, until := range holds {
+		out = append(out, fmt.Sprintf("provider %s: recorded hold until %s (in %s); starts are gated",
+			provider, until.UTC().Format(time.RFC3339), until.Sub(now).Round(time.Minute)))
+	}
+	sort.Strings(out)
+	return out
 }
