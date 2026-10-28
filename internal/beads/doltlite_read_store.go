@@ -1002,6 +1002,7 @@ func doltliteCanSelectBoundedTopN(query ListQuery, sets []doltliteTableSet, extr
 		extraWhere == "" &&
 		query.ParentID == "" &&
 		len(query.Metadata) == 0 &&
+		query.ExternalRef == "" &&
 		query.CreatedBefore.IsZero() &&
 		query.UpdatedBefore.IsZero() &&
 		query.SeekAfter == nil
@@ -1341,6 +1342,15 @@ func (s *DoltliteReadStore) buildDoltliteTableQuery(query ListQuery, tables dolt
 		where = append(where, "EXISTS (SELECT 1 FROM "+tables.labels+" l WHERE l.issue_id = i.id AND l.label = ?)")
 		args = append(args, query.Label)
 	}
+	if query.ExternalRef != "" {
+		if !flags.hasExternalRef {
+			// A table without the column holds no row with a top-level
+			// external_ref, so nothing in it can match.
+			return doltliteTableQuery{skipTable: true}, nil
+		}
+		where = append(where, "i.external_ref = ?")
+		args = append(args, query.ExternalRef)
+	}
 	if len(query.Metadata) > 0 {
 		metadataWhere, metadataArgs := doltliteMetadataFilterPredicates(query.Metadata)
 		where = append(where, metadataWhere...)
@@ -1387,7 +1397,7 @@ func (s *DoltliteReadStore) queryIssueTable(query ListQuery, tables doltliteTabl
 	parentColumn := doltliteQualifiedDependsOnExpr("pc")
 	sqlText := `SELECT i.id, COALESCE(i.title, ''), COALESCE(i.status, ''), COALESCE(i.issue_type, ''), i.priority, i.created_at,
 		COALESCE(i.updated_at, ''), COALESCE(i.assignee, ''), COALESCE(i.description, ''), COALESCE(i.metadata, '{}'),
-		` + parentColumn + `, ` + tq.flags.ephemeral + `, ` + tq.flags.noHistory + `, ` + closeReasonColumn + `
+		` + parentColumn + `, ` + tq.flags.ephemeral + `, ` + tq.flags.noHistory + `, ` + closeReasonColumn + `, ` + tq.flags.externalRef + `
 		FROM ` + tables.issues + ` i` + tq.parentJoin
 	if len(tq.where) > 0 {
 		sqlText += " WHERE " + strings.Join(tq.where, " AND ")
@@ -1439,6 +1449,12 @@ func (s *DoltliteReadStore) queryIssueTable(query ListQuery, tables doltliteTabl
 type doltliteStorageFlagExprs struct {
 	ephemeral string
 	noHistory string
+	// externalRef yields the row's top-level external_ref, or '' for a
+	// snapshot whose table predates the column.
+	externalRef string
+	// hasExternalRef reports whether the table carries the external_ref
+	// column, i.e. whether an external_ref filter can match any row there.
+	hasExternalRef bool
 	// hasColumns reports whether the table carries at least one storage-flag
 	// column, i.e. whether per-row tier classification is possible.
 	hasColumns bool
@@ -1466,7 +1482,7 @@ func (s *DoltliteReadStore) closeReasonExprFor(tables doltliteTableSet) (string,
 // failure is propagated rather than treated as an absent column, so a
 // transient DB error cannot silently downgrade tier classification.
 func (s *DoltliteReadStore) storageFlagExprsFor(tables doltliteTableSet) (doltliteStorageFlagExprs, error) {
-	flags := doltliteStorageFlagExprs{ephemeral: "0", noHistory: "0"}
+	flags := doltliteStorageFlagExprs{ephemeral: "0", noHistory: "0", externalRef: "''"}
 	if tables.wisps {
 		flags.ephemeral = "1"
 	}
@@ -1485,6 +1501,14 @@ func (s *DoltliteReadStore) storageFlagExprsFor(tables doltliteTableSet) (doltli
 	if hasNoHistory {
 		flags.noHistory = "COALESCE(i.no_history, 0)"
 		flags.hasColumns = true
+	}
+	hasExternalRef, err := s.tableHasColumn(tables.issues, "external_ref")
+	if err != nil {
+		return doltliteStorageFlagExprs{}, err
+	}
+	if hasExternalRef {
+		flags.externalRef = "COALESCE(i.external_ref, '')"
+		flags.hasExternalRef = true
 	}
 	return flags, nil
 }
@@ -1554,7 +1578,7 @@ func scanBead(rows interface{ Scan(...any) error }) (Bead, error) {
 		noHistory   int64
 		closeReason string
 	)
-	if err := rows.Scan(&b.ID, &b.Title, &b.Status, &b.Type, &priority, &createdRaw, &updatedRaw, &b.Assignee, &b.Description, &metadataRaw, &b.ParentID, &ephemeral, &noHistory, &closeReason); err != nil {
+	if err := rows.Scan(&b.ID, &b.Title, &b.Status, &b.Type, &priority, &createdRaw, &updatedRaw, &b.Assignee, &b.Description, &metadataRaw, &b.ParentID, &ephemeral, &noHistory, &closeReason, &b.ExternalRef); err != nil {
 		return b, err
 	}
 	if priority.Valid {

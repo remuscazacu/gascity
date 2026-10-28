@@ -895,6 +895,7 @@ type bdIssue struct {
 	Ref          string       `json:"ref"`
 	Needs        []string     `json:"needs"`
 	Description  string       `json:"description"`
+	ExternalRef  string       `json:"external_ref"`
 	Labels       []string     `json:"labels"`
 	Metadata     StringMap    `json:"metadata,omitempty"`
 	Dependencies []bdIssueDep `json:"dependencies,omitempty"`
@@ -1113,6 +1114,7 @@ func (b *bdIssue) toBead() Bead {
 		Ref:                  b.Ref,
 		Needs:                b.Needs,
 		Description:          b.Description,
+		ExternalRef:          b.ExternalRef,
 		Labels:               b.Labels,
 		Metadata:             b.Metadata,
 		Dependencies:         deps,
@@ -1402,6 +1404,9 @@ func (s *BdStore) CreateWithStorage(b Bead, storage StorageClass) (Bead, error) 
 	if b.DeferUntil != nil {
 		args = append(args, "--defer", b.DeferUntil.Format(time.RFC3339))
 	}
+	if b.ExternalRef != "" {
+		args = append(args, "--external-ref", b.ExternalRef)
+	}
 	metadata := maps.Clone(b.Metadata)
 	if b.From != "" {
 		if metadata == nil {
@@ -1432,6 +1437,9 @@ func (s *BdStore) CreateWithStorage(b Bead, storage StorageClass) (Bead, error) 
 	}
 	if created.From == "" {
 		created.From = b.From
+	}
+	if created.ExternalRef == "" {
+		created.ExternalRef = b.ExternalRef
 	}
 	if created.Priority == nil && b.Priority != nil {
 		created.Priority = cloneIntPtr(b.Priority)
@@ -2962,6 +2970,9 @@ func (s *BdStore) listViaBDList(query ListQuery) ([]Bead, error) {
 	if !serverQuery.CreatedBefore.IsZero() {
 		args = append(args, "--created-before", serverQuery.CreatedBefore.Format(time.RFC3339Nano))
 	}
+	if serverQuery.ExternalRef != "" {
+		args = append(args, "--external-ref="+serverQuery.ExternalRef)
+	}
 	args = append(args, "--include-infra", "--include-gates")
 	if bdListShouldIncludeTemplates(query) {
 		args = append(args, "--include-templates")
@@ -3091,6 +3102,11 @@ func (s *BdStore) listEphemeral(query ListQuery) ([]Bead, error) {
 	clauses, serverFilteredOnly = appendBdQueryClause(clauses, serverFilteredOnly, "type", serverQuery.Type)
 	clauses, serverFilteredOnly = appendBdQueryClause(clauses, serverFilteredOnly, "assignee", serverQuery.Assignee)
 	clauses, serverFilteredOnly = appendBdQueryClause(clauses, serverFilteredOnly, "parent", serverQuery.ParentID)
+	if serverQuery.ExternalRef != "" {
+		// bd query has no external_ref field: the filter is applied Go-side by
+		// applyListQuery below, so no server limit may cut rows before it.
+		serverFilteredOnly = false
+	}
 
 	args := []string{"query", "--json", strings.Join(clauses, " AND ")}
 	if serverQuery.IncludeClosed || serverQuery.Status == "closed" {

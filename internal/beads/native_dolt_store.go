@@ -3297,6 +3297,10 @@ func nativeIssueFromBead(b Bead) (*beadslib.Issue, error) {
 		CloseReason: b.CloseReason,
 		RowVersion:  b.Revision,
 	}
+	if b.ExternalRef != "" {
+		externalRef := b.ExternalRef
+		issue.ExternalRef = &externalRef
+	}
 	if b.Priority != nil {
 		issue.Priority = *b.Priority
 	} else {
@@ -3364,6 +3368,9 @@ func beadFromNativeIssue(issue *beadslib.Issue) (Bead, error) {
 		CloseReason:          bdCloseReason(status, issue.CloseReason),
 		IndefinitelyDeferred: indefinitelyDeferred,
 		Revision:             issue.RowVersion,
+	}
+	if issue.ExternalRef != nil {
+		b.ExternalRef = *issue.ExternalRef
 	}
 	for _, dep := range issue.Dependencies {
 		if dep == nil {
@@ -3487,6 +3494,10 @@ func nativeIssueFilterFromListQuery(query ListQuery) beadslib.IssueFilter {
 		MetadataFields:      query.Metadata,
 		CreatedBefore:       zeroTimePtr(query.CreatedBefore),
 		IncludeDependencies: true,
+	}
+	if query.ExternalRef != "" {
+		externalRef := query.ExternalRef
+		filter.ExternalRef = &externalRef
 	}
 	switch query.TierMode {
 	case TierWisps:

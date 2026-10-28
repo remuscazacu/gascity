@@ -2202,6 +2202,8 @@ func beadCopyDifference(want, got beads.Bead) string {
 		return fmt.Sprintf("parent %q != %q", want.ParentID, got.ParentID)
 	case want.Ref != got.Ref:
 		return fmt.Sprintf("ref %q != %q", want.Ref, got.Ref)
+	case want.ExternalRef != got.ExternalRef:
+		return fmt.Sprintf("external_ref %q != %q", want.ExternalRef, got.ExternalRef)
 	// Ephemeral and NoHistory are the two tier-routing bits. A copy that lost
 	// either lands the row in a tier its readers do not query.
 	case want.Ephemeral != got.Ephemeral:

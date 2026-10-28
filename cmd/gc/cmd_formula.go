@@ -995,86 +995,21 @@ store, copy them into the binding with
 				return nil
 			}
 
-			isGraphFormula, _, err := graphv2.IsGraphV2Formula(args[0], scope.searchPaths)
+			// The standalone arm is shared with the API's
+			// POST /formulas/{name}/cook (controllerState.CookFormula), so the two
+			// cannot drift; see cookFormulaStandalone.
+			cooked, err := cookFormulaStandalone(cmd.Context(), cfg, cityPath, scope, store, graphStore, args[0], title, cookVars, stderr)
 			if err != nil {
-				return formulaCommandError(stderr, "gc formula cook", jsonOutput, fmt.Errorf("load formula %q: %w", args[0], err))
+				command := "gc formula cook"
+				var stageErr *formulaCookStageError
+				if errors.As(err, &stageErr) {
+					command = stageErr.cliCommand()
+				}
+				return formulaCommandError(stderr, command, jsonOutput, err)
 			}
-			inv, err := graphv2.PrepareInvocation(cmd.Context(), store, args[0], scope.searchPaths, "", cookVars)
-			if err != nil {
-				return formulaCommandError(stderr, "gc formula cook", jsonOutput, fmt.Errorf("prepare formulas v2 invocation: %w", err))
-			}
-			printGraphV2Deprecations(stderr, inv.Deprecations)
-			cookVars = inv.Vars
-
-			var result *molecule.Result
-			// rootStore is the store the cooked root ended up in, so the --meta
-			// stamp below lands on the bead it just created rather than on a
-			// store that has never held it.
-			rootStore := store
-			if isGraphFormula {
-				// This arm writes molecule.Cook's sequence out rather than
-				// calling molecule.CookChoosingStore, and it needs all three
-				// capabilities that function's doc comment names as absent: the
-				// idempotency key is derived from the compiled recipe
-				// (stampFormulaCookGraphV2Root), the graph lock must stay held
-				// past the instantiate for the --meta stamp below, and the recipe
-				// is decorated through the store that will own it.
-				//
-				// Stamp the run root with its store/scope identity before
-				// instantiating, exactly as the --attach branch does via
-				// decorateFormulaCookGraphV2Recipe. Without it a standalone-cooked
-				// graph.v2 run root carries no gc.root_store_ref/gc.scope_kind, and
-				// the dashboard run-detail projection rejects the whole run with 422
-				// invalid_snapshot (sr-xz9f).
-				storeRef := workflowStoreRefForDir(scope.storeRoot, cityPath, loadedCityName(cfg, cityPath), cfg)
-				recipe, err := formula.CompileWithoutRuntimeVarValidation(cmd.Context(), args[0], scope.searchPaths, cookVars)
-				if err != nil {
-					return formulaCommandError(stderr, "gc formula cook: compile", jsonOutput, err)
-				}
-				if err := molecule.ValidateRecipeRuntimeVars(recipe, molecule.Options{Title: title, Vars: cookVars}); err != nil {
-					return formulaCommandError(stderr, "gc formula cook", jsonOutput, err)
-				}
-				// One rule for both arms: the classifier picks the store, and it
-				// answers ClassGraph for every graph.v2 pour (the compiler stamps
-				// gc.kind=workflow on the root). The recipe is decorated through
-				// the store that will own it, so the root's identity metadata is
-				// written where the root lands.
-				rootStore = moleculeClassStore(recipe, store, graphStore)
-				graphRootKey := stampFormulaCookGraphV2Root(recipe, args[0], inv.InputConvoy, cookVars)
-				if err := decorateFormulaCookGraphV2Recipe(recipe, cookVars, storeRef, scope.rig, rootStore, loadedCityName(cfg, cityPath), cityPath, cfg); err != nil {
-					return formulaCommandError(stderr, "gc formula cook", jsonOutput, fmt.Errorf("decorate formulas v2 recipe: %w", err))
-				}
-				if graphRootKey != "" {
-					unlock := graphv2.LockKey(graphRootKey)
-					defer unlock()
-				}
-				result, err = molecule.Instantiate(cmd.Context(), rootStore, recipe, molecule.Options{
-					Title:          title,
-					Vars:           cookVars,
-					IdempotencyKey: graphRootKey,
-				})
-				if err != nil {
-					return formulaCommandError(stderr, "gc formula cook", jsonOutput, err)
-				}
-				emitFormulaCookExecutionFacts(rootStore, store, cityPath, result, stderr)
-			} else {
-				// The legacy compiler still emits a graph-class root for a
-				// root-only formula: `phase = "vapor"` (or no [[steps]]) compiles
-				// to a root stamped gc.kind=wisp, which is coordclass.Classify's
-				// first arm. Asking the classifier instead of asking which
-				// compiler ran is what keeps such a wisp out of the work ledger,
-				// where it would read as a stranded infrastructure bead and stop
-				// boot. A v1 POURED molecule classifies as work and stays exactly
-				// where it always was.
-				opts := molecule.Options{Title: title, Vars: cookVars}
-				var err error
-				result, rootStore, err = molecule.CookChoosingStore(cmd.Context(), args[0], scope.searchPaths, opts, func(recipe *formula.Recipe) beads.Store {
-					return moleculeClassStore(recipe, store, graphStore)
-				})
-				if err != nil {
-					return formulaCommandError(stderr, "gc formula cook", jsonOutput, err)
-				}
-			}
+			// The graph lock (if any) stays held across the --meta stamp below.
+			defer cooked.release()
+			result, rootStore := cooked.result, cooked.rootStore
 
 			rootMeta, err := parseMetadataArgs(metadata)
 			if err != nil {

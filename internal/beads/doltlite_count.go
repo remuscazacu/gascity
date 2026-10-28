@@ -141,6 +141,10 @@ func doltliteCountSupported(query ListQuery) bool {
 	if len(query.Metadata) > 0 {
 		return false
 	}
+	// doltliteCountWhere does not translate external_ref.
+	if query.ExternalRef != "" {
+		return false
+	}
 	if query.TierMode != TierIssues {
 		return false
 	}

@@ -117,7 +117,14 @@ type ListQuery struct {
 	// into its backend returns a superset, which ApplyListQuery/Matches then cut
 	// exactly — so the RESULT is always exact and only the pushdown is
 	// best-effort. It counts as a filter, so an IDs query needs no AllowScan.
-	IDs           []string
+	IDs []string
+	// ExternalRef is an exact match on the bead's top-level external_ref
+	// field (bd's external_ref column). It does not consult
+	// Metadata["external_ref"]; callers that want either location must union
+	// an ExternalRef query with a Metadata query themselves. Backends that
+	// cannot push it down filter it Go-side via Matches, and must then not
+	// apply a native row limit before that filter.
+	ExternalRef   string
 	Metadata      map[string]string
 	CreatedBefore time.Time
 	// UpdatedBefore matches beads whose UpdatedAt is before this timestamp.
@@ -221,6 +228,7 @@ func (q ListQuery) HasFilter() bool {
 		len(q.Assignees) > 0 ||
 		q.ParentID != "" ||
 		len(q.IDs) > 0 ||
+		q.ExternalRef != "" ||
 		len(q.Metadata) > 0 ||
 		!q.CreatedBefore.IsZero() ||
 		!q.UpdatedBefore.IsZero() ||
@@ -293,6 +301,9 @@ func (q ListQuery) Matches(b Bead) bool {
 		if !matched {
 			return false
 		}
+	}
+	if q.ExternalRef != "" && b.ExternalRef != q.ExternalRef {
+		return false
 	}
 	if len(q.Metadata) > 0 && !matchesMetadata(b, q.Metadata) {
 		return false

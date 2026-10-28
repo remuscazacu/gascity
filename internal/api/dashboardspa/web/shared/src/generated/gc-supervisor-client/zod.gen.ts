@@ -122,6 +122,7 @@ export const zBeadCreateInputBody = z.object({
     assignee: z.string().optional(),
     defer_until: z.iso.datetime().optional(),
     description: z.string().optional(),
+    external_ref: z.string().optional(),
     labels: z.array(z.string()).nullish(),
     metadata: z.record(z.string(), z.string()).optional(),
     parent: z.string().optional(),
@@ -417,6 +418,7 @@ export const zBead = z.object({
     dependencies: z.array(zDep).nullish(),
     description: z.string().optional(),
     ephemeral: z.boolean().optional(),
+    external_ref: z.string().optional(),
     from: z.string().optional(),
     id: z.string(),
     is_blocked: z.boolean().optional(),
@@ -628,6 +630,18 @@ export const zConversationGroupRecord = z.object({
     Mode: z.string(),
     RootConversation: zConversationRef,
     SchemaVersion: z.coerce.bigint().min(BigInt('-9223372036854775808'), { error: 'Invalid value: Expected int64 to be >= -9223372036854775808' }).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' })
+});
+
+export const zFormulaCookInputBody = z.object({
+    rig: z.string().optional(),
+    title: z.string().optional(),
+    vars: z.record(z.string(), z.string()).optional()
+});
+
+export const zFormulaCookOutputBody = z.object({
+    created: z.coerce.bigint().min(BigInt('-9223372036854775808'), { error: 'Invalid value: Expected int64 to be >= -9223372036854775808' }).max(BigInt('9223372036854775807'), { error: 'Invalid value: Expected int64 to be <= 9223372036854775807' }),
+    id_mapping: z.record(z.string(), z.string()).optional(),
+    root_id: z.string()
 });
 
 export const zFormulaPreviewBody = z.object({
@@ -8300,7 +8314,8 @@ export const zGetV0CityByCityNameBeadsQuery = z.object({
     label: z.string().optional(),
     assignee: z.string().optional(),
     rig: z.string().optional(),
-    all: z.boolean().optional()
+    all: z.boolean().optional(),
+    external_ref: z.string().optional()
 });
 
 /**
@@ -8878,6 +8893,23 @@ export const zPutV0CityByCityNameFormulasByNamePath = z.object({
  * OK
  */
 export const zPutV0CityByCityNameFormulasByNameResponse = zOkResponseBody;
+
+export const zCookFormulaBody = zFormulaCookInputBody;
+
+export const zCookFormulaHeaders = z.object({
+    'X-GC-Request': z.string().min(1),
+    'Idempotency-Key': z.string().optional()
+});
+
+export const zCookFormulaPath = z.object({
+    cityName: z.string().min(1).regex(/\S/),
+    name: z.string().min(1).regex(/\S/)
+});
+
+/**
+ * Created
+ */
+export const zCookFormulaResponse = zFormulaCookOutputBody;
 
 export const zPostV0CityByCityNameFormulasByNamePreviewBody = zFormulaPreviewBody;
 

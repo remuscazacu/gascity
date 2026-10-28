@@ -24,6 +24,7 @@ type bdStoreBridgeCreateRequest struct {
 	Ref         string            `json:"ref,omitempty"`
 	Needs       []string          `json:"needs,omitempty"`
 	Description string            `json:"description,omitempty"`
+	ExternalRef string            `json:"external_ref,omitempty"`
 	Assignee    string            `json:"assignee,omitempty"`
 	From        string            `json:"from,omitempty"`
 	Metadata    map[string]string `json:"metadata,omitempty"`
@@ -55,6 +56,7 @@ type bdStoreBridgeBead struct {
 	Ref         string            `json:"ref,omitempty"`
 	Needs       []string          `json:"needs,omitempty"`
 	Description string            `json:"description,omitempty"`
+	ExternalRef string            `json:"external_ref,omitempty"`
 	Labels      []string          `json:"labels,omitempty"`
 	Metadata    map[string]string `json:"metadata,omitempty"`
 }
@@ -163,6 +165,7 @@ func runBdStoreBridge(op string, args []string, dir, host, port, user string, st
 			Ref:         req.Ref,
 			Needs:       req.Needs,
 			Description: req.Description,
+			ExternalRef: req.ExternalRef,
 			Assignee:    req.Assignee,
 			From:        req.From,
 			Metadata:    req.Metadata,
@@ -428,6 +431,7 @@ func bridgeBead(item beads.Bead) bdStoreBridgeBead {
 		Ref:         item.Ref,
 		Needs:       item.Needs,
 		Description: item.Description,
+		ExternalRef: item.ExternalRef,
 		Labels:      item.Labels,
 		Metadata:    item.Metadata,
 	}
