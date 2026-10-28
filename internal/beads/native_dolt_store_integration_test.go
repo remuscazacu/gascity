@@ -545,3 +545,65 @@ func assertSameJSON(t *testing.T, got, want string) {
 		t.Fatalf("payload = %q, want the JSON value of %q", got, want)
 	}
 }
+
+// TestNativeDoltStoreRealBackendMetadataIntValue pins that a metadata filter
+// on a digit string finds a bead whose metadata value bd stored as a JSON
+// number (bd's --set-metadata coerces digits: live mirrors carry
+// "external_ref":2015999). Upstream filters with
+// JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.key')) = ?, which renders a number
+// as its digits, so the pushdown already matches it; this test keeps it so.
+func TestNativeDoltStoreRealBackendMetadataIntValue(t *testing.T) {
+	ctx := context.Background()
+	storage, err := beadslib.OpenBestAvailable(ctx, filepath.Join(t.TempDir(), ".beads"))
+	if err != nil {
+		t.Skipf("upstream native beads storage unavailable: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := storage.Close(); err != nil {
+			t.Fatalf("close upstream storage: %v", err)
+		}
+	})
+	if err := storage.SetConfig(ctx, "issue_prefix", "gc"); err != nil {
+		t.Fatalf("set issue prefix: %v", err)
+	}
+	store := newNativeDoltStoreWithStorageAndPrefix(storage, "native-int-metadata", "gc")
+
+	setRaw := func(title, raw string) string {
+		t.Helper()
+		b, err := store.Create(Bead{Title: title})
+		if err != nil {
+			t.Fatalf("Create %s: %v", title, err)
+		}
+		if err := storage.UpdateIssue(ctx, b.ID, map[string]interface{}{"metadata": json.RawMessage(raw)}, "test"); err != nil {
+			t.Fatalf("UpdateIssue %s: %v", title, err)
+		}
+		return b.ID
+	}
+	match := setRaw("int mirror", `{"external_ref":2015999}`)
+	stored, err := storage.GetIssue(ctx, match)
+	if err != nil {
+		t.Fatalf("GetIssue: %v", err)
+	}
+	var probe map[string]any
+	if err := json.Unmarshal(stored.Metadata, &probe); err != nil {
+		t.Fatalf("stored metadata %q: %v", stored.Metadata, err)
+	}
+	if _, isNumber := probe["external_ref"].(float64); !isNumber {
+		t.Fatalf("stored external_ref = %#v (%s), want a JSON number: the fixture is vacuous", probe["external_ref"], stored.Metadata)
+	}
+	setRaw("longer int", `{"external_ref":20159990}`)
+	setRaw("other quoted", `{"external_ref":"2015998"}`)
+
+	for _, q := range []ListQuery{
+		{Metadata: map[string]string{"external_ref": "2015999"}},
+		{Metadata: map[string]string{"external_ref": "2015999"}, Limit: 1, Sort: SortCreatedAsc},
+	} {
+		rows, err := store.List(q)
+		if err != nil {
+			t.Fatalf("List(%+v): %v", q, err)
+		}
+		if len(rows) != 1 || rows[0].ID != match || rows[0].Metadata["external_ref"] != "2015999" {
+			t.Fatalf("List(%+v) = %#v, want only %s with external_ref \"2015999\"", q, rows, match)
+		}
+	}
+}
