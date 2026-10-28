@@ -128,3 +128,55 @@ func TestBeadListExternalRefUnion(t *testing.T) {
 		t.Fatalf("all-rigs union = %v, want %v", got, want)
 	}
 }
+
+// TestBeadListExternalRefUnionThroughCachingStore runs the union over the
+// production rig-store shape: a primed CachingStore, whose open-only reads are
+// served from the in-memory cache rather than the backing store.
+func TestBeadListExternalRefUnionThroughCachingStore(t *testing.T) {
+	state := newFakeState(t)
+	backing := beads.NewMemStore()
+	mustCreate := func(b beads.Bead) beads.Bead {
+		t.Helper()
+		created, err := backing.Create(b)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return created
+	}
+	a := mustCreate(beads.Bead{Title: "A top-level only", ExternalRef: "2013950"})
+	b := mustCreate(beads.Bead{Title: "B metadata only", Metadata: map[string]string{"external_ref": "2013950"}})
+	c := mustCreate(beads.Bead{Title: "C both", ExternalRef: "2013950", Metadata: map[string]string{"external_ref": "2013950"}})
+	mustCreate(beads.Bead{Title: "D other ticket", ExternalRef: "2013951"})
+	mustCreate(beads.Bead{Title: "E no ref"})
+	cache := beads.NewCachingStoreForTest(backing, nil)
+	if err := cache.Prime(t.Context()); err != nil {
+		t.Fatalf("Prime: %v", err)
+	}
+	state.stores["myrig"] = cache
+	h := newTestCityHandler(t, state)
+
+	for _, query := range []string{"rig=myrig&external_ref=2013950", "rig=myrig&all=true&external_ref=2013950"} {
+		req := httptest.NewRequest("GET", cityURL(state, "/beads?"+query), nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET /beads?%s status = %d, body: %s", query, rec.Code, rec.Body.String())
+		}
+		var resp struct {
+			Items []beads.Bead `json:"items"`
+		}
+		if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+			t.Fatal(err)
+		}
+		got := make([]string, 0, len(resp.Items))
+		for _, item := range resp.Items {
+			got = append(got, item.ID)
+		}
+		sort.Strings(got)
+		want := []string{a.ID, b.ID, c.ID}
+		sort.Strings(want)
+		if strings.Join(got, ",") != strings.Join(want, ",") {
+			t.Fatalf("GET /beads?%s via CachingStore = %v, want %v", query, got, want)
+		}
+	}
+}
