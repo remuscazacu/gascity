@@ -7,6 +7,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/gastownhall/gascity/internal/beads"
@@ -455,6 +456,48 @@ type FormulaMutator interface {
 	// DeleteFormula removes a city-local formula source.
 	DeleteFormula(name string) error
 }
+
+// FormulaCooker is an optional State extension that instantiates a formula as
+// a standalone molecule: the HTTP form of `gc formula cook <name> [--rig R]
+// [--title T] [--var k=v ...]` with no --attach and no --meta. The molecule is
+// created in the scope's store exactly as the CLI creates it; nothing is
+// routed, promoted, attached, or poked. Like FormulaMutator it is
+// type-asserted by the handler, so a State that cannot cook simply does not
+// implement it (the endpoint then answers 501).
+type FormulaCooker interface {
+	CookFormula(ctx context.Context, req FormulaCookRequest) (FormulaCookResult, error)
+}
+
+// FormulaCookRequest is the input to FormulaCooker.CookFormula.
+type FormulaCookRequest struct {
+	// Name is the formula name.
+	Name string
+	// Rig selects the scope (the CLI's --rig). Empty means city scope, the
+	// CLI's explicit --city.
+	Rig string
+	// Title overrides the root bead title (the CLI's --title).
+	Title string
+	// Vars are the formula variables (the CLI's repeated --var).
+	Vars map[string]string
+}
+
+// FormulaCookResult is the outcome of a standalone cook.
+type FormulaCookResult struct {
+	// RootID is the id of the created molecule root.
+	RootID string
+	// Created is the number of beads created.
+	Created int
+	// IDMapping maps each formula step id to the bead id created for it.
+	IDMapping map[string]string
+}
+
+// ErrFormulaCookNotFound marks a cook failure whose cause is a scope or
+// formula that does not exist; the endpoint maps it to 404.
+var ErrFormulaCookNotFound = errors.New("formula cook: not found")
+
+// ErrFormulaCookInvalid marks a cook failure caused by the request itself
+// (e.g. a missing or invalid variable); the endpoint maps it to 400.
+var ErrFormulaCookInvalid = errors.New("formula cook: invalid request")
 
 // ConfigWriteSerializer is an optional State extension that runs fn as one
 // per-city config transaction. Pack import add/remove mutate several city

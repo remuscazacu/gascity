@@ -58,6 +58,9 @@
       "description": {
         "type": "string"
       },
+      "external_ref": {
+        "type": "string"
+      },
       "labels": {
         "type": "array",
         "items": {

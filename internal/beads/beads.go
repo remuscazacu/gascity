@@ -161,6 +161,10 @@ type Bead struct {
 	Ref         string   `json:"ref,omitempty"`         // formula step ID or formula name
 	Needs       []string `json:"needs,omitempty"`       // dependency step refs
 	Description string   `json:"description,omitempty"` // step instructions
+	// ExternalRef mirrors bd's top-level external_ref column: an identifier in
+	// an external system of record (e.g. a ticket number). It is distinct from
+	// Metadata["external_ref"]; ListQuery.ExternalRef matches only this field.
+	ExternalRef string   `json:"external_ref,omitempty"`
 	Labels      []string `json:"labels,omitempty"`
 	// Metadata uses StringMap (not map[string]string) so decode tolerates the
 	// non-string JSON values the external bd CLI emits — `--set-metadata

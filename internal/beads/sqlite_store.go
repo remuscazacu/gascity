@@ -1524,7 +1524,9 @@ func sqliteListSQL(q ListQuery, projection string) (string, []any) {
 // seek boundary remain residual filters over decoded Beads. Applying LIMIT
 // before any of those filters can discard a later matching row permanently.
 func sqliteListCanPushLimit(q ListQuery) bool {
-	return q.TierMode != TierWisps && len(q.Assignees) == 0 && q.SeekAfter == nil
+	// ExternalRef has no column; it lives only in bead_json and is matched
+	// Go-side, so it is a residual filter too.
+	return q.TierMode != TierWisps && len(q.Assignees) == 0 && q.SeekAfter == nil && q.ExternalRef == ""
 }
 
 // ListOpen returns non-closed beads in creation order by default.
