@@ -701,6 +701,9 @@ func mergeCacheEventPatch(base, patch Bead, fields map[string]json.RawMessage) B
 	if hasCacheEventField(fields, "description") {
 		merged.Description = patch.Description
 	}
+	if hasCacheEventField(fields, "external_ref") {
+		merged.ExternalRef = patch.ExternalRef
+	}
 	if hasCacheEventField(fields, "labels") {
 		merged.Labels = slices.Clone(patch.Labels)
 	}
@@ -1298,6 +1301,7 @@ func beadChanged(old, fresh Bead, skipLabels bool) bool {
 		old.ParentID != fresh.ParentID ||
 		old.Ref != fresh.Ref ||
 		old.Description != fresh.Description ||
+		old.ExternalRef != fresh.ExternalRef ||
 		old.Ephemeral != fresh.Ephemeral ||
 		old.IndefinitelyDeferred != fresh.IndefinitelyDeferred ||
 		!timePtrEqual(old.DeferUntil, fresh.DeferUntil) ||

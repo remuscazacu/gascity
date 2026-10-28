@@ -88,6 +88,7 @@ create)
 	ephemeral=$(echo "$input" | jq -r '.ephemeral // false')
 	no_history=$(echo "$input" | jq -r '.no_history // false')
 	defer_until=$(echo "$input" | jq -r '.defer_until // ""')
+	external_ref=$(echo "$input" | jq -r '.external_ref // ""')
 	created_at=$(now)
 
 	# Build labels array from input, including metadata as meta: labels.
@@ -118,6 +119,7 @@ create)
 		--argjson ephemeral "$ephemeral" \
 		--argjson no_history "$no_history" \
 		--arg defer_until "$defer_until" \
+		--arg external_ref "$external_ref" \
 		'{
         id: $id,
         title: $title,
@@ -133,7 +135,8 @@ create)
         labels: $labels,
         ephemeral: $ephemeral,
         no_history: $no_history
-      } + (if $defer_until == "" then {} else {defer_until: $defer_until} end)' >"$STATE_ROOT/$id.json"
+      } + (if $defer_until == "" then {} else {defer_until: $defer_until} end)
+        + (if $external_ref == "" then {} else {external_ref: $external_ref} end)' >"$STATE_ROOT/$id.json"
 
 	# Output the created bead (normalized: meta: labels → .metadata map).
 	normalize_bead_output <"$STATE_ROOT/$id.json"

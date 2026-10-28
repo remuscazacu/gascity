@@ -150,6 +150,87 @@ func RunStoreTestsWithOptions(t *testing.T, newStore func() beads.Store, opts Op
 		}
 	})
 
+	t.Run("CreateExternalRefRoundTrips", func(t *testing.T) {
+		s := newStore()
+		created, err := s.Create(beads.Bead{Title: "mirror", ExternalRef: "2013950"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if created.ExternalRef != "2013950" {
+			t.Errorf("create echo ExternalRef = %q, want %q", created.ExternalRef, "2013950")
+		}
+		got, err := s.Get(created.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.ExternalRef != "2013950" {
+			t.Errorf("ExternalRef = %q after Get, want %q from Create", got.ExternalRef, "2013950")
+		}
+		plain, err := s.Create(beads.Bead{Title: "plain"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		gotPlain, err := s.Get(plain.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if gotPlain.ExternalRef != "" {
+			t.Errorf("ExternalRef = %q on a bead created without one, want empty", gotPlain.ExternalRef)
+		}
+	})
+
+	t.Run("ListFiltersByExternalRef", func(t *testing.T) {
+		// The matching bead is created FIRST so that, under a created-desc
+		// sort, every non-matching bead sorts ahead of it: a backend that
+		// pushed Limit below a residual (Go-side) external_ref filter would cut
+		// the match before the filter ran and return nothing.
+		s := newStore()
+		match, err := s.Create(beads.Bead{Title: "top-level ref", ExternalRef: "2013950"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.Create(beads.Bead{Title: "other ref", ExternalRef: "2013951"}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.Create(beads.Bead{Title: "metadata only", Metadata: map[string]string{"external_ref": "2013950"}}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.Create(beads.Bead{Title: "no ref"}); err != nil {
+			t.Fatal(err)
+		}
+		got, err := s.List(beads.ListQuery{ExternalRef: "2013950"})
+		if err != nil {
+			t.Fatalf("List(ExternalRef) error = %v", err)
+		}
+		if len(got) != 1 || got[0].ID != match.ID {
+			t.Fatalf("List(ExternalRef) = %v, want exactly [%s] (top-level field only, exact match)", titlesOf(got), match.Title)
+		}
+		bounded, err := s.List(beads.ListQuery{ExternalRef: "2013950", Limit: 1, Sort: beads.SortCreatedDesc})
+		if err != nil {
+			t.Fatalf("List(ExternalRef, Limit 1) error = %v", err)
+		}
+		if len(bounded) != 1 || bounded[0].ID != match.ID {
+			t.Fatalf("List(ExternalRef, Limit 1) = %v, want [%s]: a limit must not cut before the external_ref filter", titlesOf(bounded), match.Title)
+		}
+		if err := s.Close(match.ID); err != nil {
+			t.Fatal(err)
+		}
+		open, err := s.List(beads.ListQuery{ExternalRef: "2013950"})
+		if err != nil {
+			t.Fatalf("List(ExternalRef) after close error = %v", err)
+		}
+		if len(open) != 0 {
+			t.Fatalf("List(ExternalRef) after close = %v, want none without IncludeClosed", titlesOf(open))
+		}
+		all, err := s.List(beads.ListQuery{ExternalRef: "2013950", IncludeClosed: true})
+		if err != nil {
+			t.Fatalf("List(ExternalRef, IncludeClosed) error = %v", err)
+		}
+		if len(all) != 1 || all[0].ID != match.ID {
+			t.Fatalf("List(ExternalRef, IncludeClosed) = %v, want [%s]", titlesOf(all), match.Title)
+		}
+	})
+
 	t.Run("CreateEchoMatchesGetOnMetadata", func(t *testing.T) {
 		// The Create return value (the "echo") must carry the same id, status, and
 		// metadata a subsequent Get returns. session.CreateSessionInfo projects the

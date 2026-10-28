@@ -65,6 +65,10 @@ type ReadyBead struct {
 	// needs nothing: the store's own Ready already applied readiness, so a row it
 	// returned is by construction unblocked.
 	BlockedBy []ReadyBeadBlocker `json:"blocked_by,omitempty"`
+	// ExternalRef is bd's external_ref (the SoR ticket a mirror bead tracks,
+	// sr-n8w5f.34), so a ready row carries the same identity the HTTP Bead
+	// shape does. Appended per the contract rule above.
+	ExternalRef string `json:"external_ref,omitempty"`
 }
 
 // ReadyBeadDep is the wire shape of one dependency edge, for the same reason
@@ -121,6 +125,7 @@ func ToReadyBead(b beads.Bead) ReadyBead {
 		From:         b.From,
 		ParentID:     b.ParentID,
 		Ref:          b.Ref,
+		ExternalRef:  b.ExternalRef,
 		Needs:        b.Needs,
 		Description:  b.Description,
 		Labels:       b.Labels,

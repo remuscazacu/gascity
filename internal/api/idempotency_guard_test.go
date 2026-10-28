@@ -24,6 +24,7 @@ import (
 var requireIdempotency = map[string]bool{
 	"create-bead":             true,
 	"create-session":          true,
+	"cook-formula":            true,
 	"send-mail":               true,
 	"create-agent":            true,
 	"create-provider":         true,

@@ -24,6 +24,9 @@ type BeadListInput struct {
 	Assignee string `query:"assignee" required:"false" doc:"Filter by assignee."`
 	Rig      string `query:"rig" required:"false" doc:"Filter by rig."`
 	All      bool   `query:"all" required:"false" doc:"Include closed beads."`
+	// ExternalRef selects beads naming one external record from EITHER
+	// location: the top-level external_ref field or metadata.external_ref.
+	ExternalRef string `query:"external_ref" required:"false" doc:"Return beads whose top-level external_ref OR metadata.external_ref equals this value (union, de-duplicated by id). Combine with all=true to include closed beads."`
 }
 
 // BeadReadyInput is the Huma input for GET /v0/city/{cityName}/beads/ready.
@@ -65,6 +68,7 @@ type BeadCreateInput struct {
 		Parent      string            `json:"parent,omitempty" doc:"Parent bead ID."`
 		Metadata    map[string]string `json:"metadata,omitempty" doc:"Metadata key-value pairs to set at create time."`
 		DeferUntil  *time.Time        `json:"defer_until,omitempty" doc:"Hide the bead from ready views until this time."`
+		ExternalRef string            `json:"external_ref,omitempty" doc:"Top-level external reference (e.g. an external ticket number), stored in the bead's external_ref field."`
 	}
 }
 

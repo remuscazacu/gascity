@@ -124,7 +124,12 @@ func (s *Server) humaHandleBeadList(ctx context.Context, input *BeadListInput) (
 	boundedFetch := 0
 	var boundedCounts map[int]int
 	var hydrateLegs map[int]bool
-	if input.All && len(assigneeTerms) == 1 {
+	// external_ref is a union of two store queries per leg (the top-level
+	// field and metadata.external_ref; see beadListQueryTerms), which no
+	// single store Count can answer, so it always takes the hydrating path.
+	// The result is a handful of rows per external record.
+	queryTerms := beadListQueryTerms(assigneeTerms, input.ExternalRef)
+	if input.All && len(assigneeTerms) == 1 && input.ExternalRef == "" {
 		// limit+1: the seek boundary rides on each store query and is enforced
 		// Go-side, so a store returns only rows after the boundary — one extra
 		// row is the has-more signal (Counts are un-seeked totals and cannot tell).
@@ -142,12 +147,14 @@ func (s *Server) humaHandleBeadList(ctx context.Context, input *BeadListInput) (
 	seen := map[string]bool{}
 	var pa partialAggregator
 	for i, leg := range legs {
-		for _, assignee := range assigneeTerms {
+		for _, term := range queryTerms {
 			query := beads.ListQuery{
 				Status:        input.Status,
 				Type:          input.Type,
 				Label:         input.Label,
-				Assignee:      assignee,
+				Assignee:      term.assignee,
+				ExternalRef:   term.externalRef,
+				Metadata:      term.metadata,
 				IncludeClosed: input.All,
 				Live:          input.Status == "in_progress",
 				// Explicit sort: with SortDefault the CachingStore returns
@@ -260,7 +267,7 @@ func (s *Server) humaHandleBeadList(ctx context.Context, input *BeadListInput) (
 	// merged set has one global total order and a bounded read is a
 	// deterministic prefix of it (#3208). A single (leg, assignee) source is
 	// already in canonical order — skip the redundant hot-path sort.
-	if len(legs)*len(assigneeTerms) > 1 {
+	if len(legs)*len(queryTerms) > 1 {
 		beads.SortBeads(all, beads.SortCreatedDesc)
 	}
 
@@ -808,6 +815,7 @@ func (s *Server) humaHandleBeadCreate(ctx context.Context, input *BeadCreateInpu
 				ParentID:    input.Body.Parent,
 				Metadata:    input.Body.Metadata,
 				DeferUntil:  input.Body.DeferUntil,
+				ExternalRef: input.Body.ExternalRef,
 			}
 			// Before anything is written, the assignee's materialized session
 			// included, and before the store is chosen: an owned row is a 422
@@ -1357,4 +1365,33 @@ func (s *Server) humaHandleBeadDelete(_ context.Context, input *BeadDeleteInput)
 // builds, and gating this to the legacy reconciler is a tracked follow-up.
 func (s *Server) wakeAfterBeadWrite() {
 	s.state.Enqueue(reconcilekey.Allocator(), reconcilekey.ControlDispatch())
+}
+
+// beadListQueryTerm is one per-leg store query of GET /beads: an assignee
+// term crossed with one external_ref location.
+type beadListQueryTerm struct {
+	assignee    string
+	externalRef string
+	metadata    map[string]string
+}
+
+// beadListQueryTerms returns the per-leg store queries GET /beads runs. Each
+// assignee term is one query; an external_ref filter doubles that, because a
+// bead may name its external record in the top-level external_ref field, in
+// metadata.external_ref, or in both. The answer is the union of one query per
+// location, and the handler's seen-by-id map de-duplicates a bead that
+// matches both.
+func beadListQueryTerms(assigneeTerms []string, externalRef string) []beadListQueryTerm {
+	terms := make([]beadListQueryTerm, 0, 2*len(assigneeTerms))
+	for _, assignee := range assigneeTerms {
+		if externalRef == "" {
+			terms = append(terms, beadListQueryTerm{assignee: assignee})
+			continue
+		}
+		terms = append(terms,
+			beadListQueryTerm{assignee: assignee, externalRef: externalRef},
+			beadListQueryTerm{assignee: assignee, metadata: map[string]string{"external_ref": externalRef}},
+		)
+	}
+	return terms
 }
