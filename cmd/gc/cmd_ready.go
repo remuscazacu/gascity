@@ -66,6 +66,7 @@ type readyBead struct {
 	Ref          string            `json:"ref,omitempty"`
 	Needs        []string          `json:"needs,omitempty"`
 	Description  string            `json:"description,omitempty"`
+	ExternalRef  string            `json:"external_ref,omitempty"`
 	Labels       []string          `json:"labels,omitempty"`
 	Metadata     map[string]string `json:"metadata,omitempty"`
 	Dependencies []readyBeadDep    `json:"dependencies,omitempty"`
@@ -134,6 +135,7 @@ func toReadyBead(b beads.Bead) readyBead {
 		Ref:          b.Ref,
 		Needs:        b.Needs,
 		Description:  b.Description,
+		ExternalRef:  b.ExternalRef,
 		Labels:       b.Labels,
 		Metadata:     b.Metadata,
 		Dependencies: toReadyBeadDeps(b.Dependencies),

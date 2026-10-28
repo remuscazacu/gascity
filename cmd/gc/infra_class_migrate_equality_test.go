@@ -70,6 +70,7 @@ func infraEqualityFixture() beads.Bead {
 		From:         "dispatcher",
 		ParentID:     "gcg-40",
 		Ref:          "step-3",
+		ExternalRef:  "2013950",
 		Needs:        []string{"gcg-39"},
 		Description:  "the bead body, which is durable domain state",
 		Labels:       []string{"gc:session"},
@@ -105,6 +106,10 @@ func beadCopyFieldMutations() map[string]func(beads.Bead) beads.Bead {
 		"From":      func(b beads.Bead) beads.Bead { b.From = ""; return b },
 		"ParentID":  func(b beads.Bead) beads.Bead { b.ParentID = ""; return b },
 		"Ref":       func(b beads.Bead) beads.Bead { b.Ref = ""; return b },
+		"ExternalRef": func(b beads.Bead) beads.Bead {
+			b.ExternalRef = ""
+			return b
+		},
 		"Description": func(b beads.Bead) beads.Bead {
 			b.Description = ""
 			return b

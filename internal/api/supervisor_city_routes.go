@@ -307,6 +307,17 @@ func (sm *SupervisorMux) registerCityRoutes() {
 	cityGet(sm, "/formulas/{name}", (*Server).humaHandleFormulaDetail, errorStatuses(http.StatusBadRequest, http.StatusNotFound, http.StatusServiceUnavailable))
 	cityGet(sm, "/formula/{name}", (*Server).humaHandleFormulaDetail, errorStatuses(http.StatusBadRequest, http.StatusNotFound, http.StatusServiceUnavailable))
 	cityPost(sm, "/formulas/{name}/preview", (*Server).humaHandleFormulaPreview, errorStatuses(http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusServiceUnavailable))
+	cityRegister(sm, huma.Operation{
+		OperationID: "cook-formula",
+		Method:      http.MethodPost,
+		Path:        "/formulas/{name}/cook",
+		Summary:     "Cook a formula as a standalone molecule",
+		Description: "Compile and instantiate a formula as real beads in the scope's store: the HTTP form of " +
+			"`gc formula cook <name> [--rig R] [--title T] [--var k=v ...]` without --attach. The molecule root is not " +
+			"routed to an agent, promoted, attached to any bead, or de-duplicated.",
+		DefaultStatus: http.StatusCreated,
+		Errors:        []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusConflict, http.StatusUnprocessableEntity, http.StatusInternalServerError, http.StatusNotImplemented},
+	}, (*Server).humaHandleFormulaCook)
 	cityPost(sm, "/formulas/{name}/validate", (*Server).humaHandleFormulaValidate, withMaxFormulaBody, errorStatuses(http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusRequestEntityTooLarge))
 	cityPut(sm, "/formulas/{name}", (*Server).humaHandleFormulaUpsert, withMaxFormulaBody, errorStatuses(http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusRequestEntityTooLarge, http.StatusNotImplemented))
 	cityDelete(sm, "/formulas/{name}", (*Server).humaHandleFormulaDelete, errorStatuses(http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusNotImplemented))

@@ -22,6 +22,7 @@ type createRequest struct {
 	Ref         string            `json:"ref,omitempty"`
 	Needs       []string          `json:"needs,omitempty"`
 	Description string            `json:"description,omitempty"`
+	ExternalRef string            `json:"external_ref,omitempty"`
 	Assignee    string            `json:"assignee,omitempty"`
 	From        string            `json:"from,omitempty"`
 	Metadata    map[string]string `json:"metadata,omitempty"`
@@ -65,6 +66,7 @@ type beadWire struct {
 	Ref         string                     `json:"ref"`
 	Needs       []string                   `json:"needs"`
 	Description string                     `json:"description"`
+	ExternalRef string                     `json:"external_ref,omitempty"`
 	Labels      []string                   `json:"labels"`
 	Metadata    map[string]json.RawMessage `json:"metadata,omitempty"`
 	Ephemeral   bool                       `json:"ephemeral,omitempty"`
@@ -83,6 +85,7 @@ func marshalCreate(b beads.Bead) ([]byte, error) {
 		Ref:         b.Ref,
 		Needs:       b.Needs,
 		Description: b.Description,
+		ExternalRef: b.ExternalRef,
 		Assignee:    b.Assignee,
 		From:        b.From,
 		Metadata:    b.Metadata,

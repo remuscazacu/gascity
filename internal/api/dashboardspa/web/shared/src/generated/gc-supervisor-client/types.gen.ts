@@ -286,6 +286,7 @@ export type Bead = {
     dependencies?: Array<Dep> | null;
     description?: string;
     ephemeral?: boolean;
+    external_ref?: string;
     from?: string;
     id: string;
     is_blocked?: boolean;
@@ -336,6 +337,10 @@ export type BeadCreateInputBody = {
      * Bead description.
      */
     description?: string;
+    /**
+     * Top-level external reference (e.g. an external ticket number), stored in the bead's external_ref field.
+     */
+    external_ref?: string;
     /**
      * Bead labels.
      */
@@ -1267,6 +1272,40 @@ export type FanoutPolicy = {
     Enabled: boolean;
     MaxPeerTriggeredPublishes: number;
     MaxTotalPeerDeliveries: number;
+};
+
+export type FormulaCookInputBody = {
+    /**
+     * Rig whose store receives the molecule (the CLI's --rig). Empty means city scope.
+     */
+    rig?: string;
+    /**
+     * Override the root bead title (the CLI's --title).
+     */
+    title?: string;
+    /**
+     * Formula variables (the CLI's repeated --var key=value).
+     */
+    vars?: {
+        [key: string]: string;
+    };
+};
+
+export type FormulaCookOutputBody = {
+    /**
+     * Number of beads created.
+     */
+    created: number;
+    /**
+     * Formula step ID to created bead ID.
+     */
+    id_mapping?: {
+        [key: string]: string;
+    };
+    /**
+     * ID of the created molecule root.
+     */
+    root_id: string;
 };
 
 export type FormulaDetailResponse = {
@@ -11550,6 +11589,10 @@ export type GetV0CityByCityNameBeadsData = {
          * Include closed beads.
          */
         all?: boolean;
+        /**
+         * Return beads whose top-level external_ref OR metadata.external_ref equals this value (union, de-duplicated by id). Combine with all=true to include closed beads.
+         */
+        external_ref?: string;
     };
     url: '/v0/city/{cityName}/beads';
 };
@@ -13817,6 +13860,78 @@ export type PutV0CityByCityNameFormulasByNameResponses = {
 };
 
 export type PutV0CityByCityNameFormulasByNameResponse = PutV0CityByCityNameFormulasByNameResponses[keyof PutV0CityByCityNameFormulasByNameResponses];
+
+export type CookFormulaData = {
+    body: FormulaCookInputBody;
+    headers: {
+        /**
+         * Anti-CSRF header required on mutation requests. Any non-empty value is accepted; the header's presence is what the server checks.
+         */
+        'X-GC-Request': string;
+        /**
+         * Idempotency key for safe retries: a repeat with the same key and body replays the first cook's result instead of cooking again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        /**
+         * City name.
+         */
+        cityName: string;
+        /**
+         * Formula name.
+         */
+        name: string;
+    };
+    query?: never;
+    url: '/v0/city/{cityName}/formulas/{name}/cook';
+};
+
+export type CookFormulaErrors = {
+    /**
+     * Bad Request
+     */
+    400: ErrorModel;
+    /**
+     * Unauthorized
+     */
+    401: ErrorModel;
+    /**
+     * Forbidden
+     */
+    403: ErrorModel;
+    /**
+     * Not Found
+     */
+    404: ErrorModel;
+    /**
+     * Conflict
+     */
+    409: ErrorModel;
+    /**
+     * Unprocessable Entity
+     */
+    422: ErrorModel;
+    /**
+     * Internal Server Error
+     */
+    500: ErrorModel;
+    /**
+     * Not Implemented
+     */
+    501: ErrorModel;
+};
+
+export type CookFormulaError = CookFormulaErrors[keyof CookFormulaErrors];
+
+export type CookFormulaResponses = {
+    /**
+     * Created
+     */
+    201: FormulaCookOutputBody;
+};
+
+export type CookFormulaResponse = CookFormulaResponses[keyof CookFormulaResponses];
 
 export type PostV0CityByCityNameFormulasByNamePreviewData = {
     body: FormulaPreviewBody;

@@ -927,6 +927,9 @@
           "ephemeral": {
             "type": "boolean"
           },
+          "external_ref": {
+            "type": "string"
+          },
           "from": {
             "type": "string"
           },
@@ -1060,6 +1063,10 @@
           },
           "description": {
             "description": "Bead description.",
+            "type": "string"
+          },
+          "external_ref": {
+            "description": "Top-level external reference (e.g. an external ticket number), stored in the bead's external_ref field.",
             "type": "string"
           },
           "labels": {
@@ -3437,6 +3444,53 @@
           "AllowUntargetedPublication",
           "MaxPeerTriggeredPublishes",
           "MaxTotalPeerDeliveries"
+        ],
+        "type": "object"
+      },
+      "FormulaCookInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "rig": {
+            "description": "Rig whose store receives the molecule (the CLI's --rig). Empty means city scope.",
+            "type": "string"
+          },
+          "title": {
+            "description": "Override the root bead title (the CLI's --title).",
+            "type": "string"
+          },
+          "vars": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Formula variables (the CLI's repeated --var key=value).",
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "FormulaCookOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "created": {
+            "description": "Number of beads created.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "id_mapping": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Formula step ID to created bead ID.",
+            "type": "object"
+          },
+          "root_id": {
+            "description": "ID of the created molecule root.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "root_id",
+          "created"
         ],
         "type": "object"
       },
@@ -30436,6 +30490,16 @@
               "description": "Include closed beads.",
               "type": "boolean"
             }
+          },
+          {
+            "description": "Return beads whose top-level external_ref OR metadata.external_ref equals this value (union, de-duplicated by id). Combine with all=true to include closed beads.",
+            "explode": false,
+            "in": "query",
+            "name": "external_ref",
+            "schema": {
+              "description": "Return beads whose top-level external_ref OR metadata.external_ref equals this value (union, de-duplicated by id). Combine with all=true to include closed beads.",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -36299,6 +36363,206 @@
           }
         },
         "summary": "Put v0 city by city name formulas by name"
+      }
+    },
+    "/v0/city/{cityName}/formulas/{name}/cook": {
+      "post": {
+        "description": "Compile and instantiate a formula as real beads in the scope's store: the HTTP form of `gc formula cook \u003cname\u003e [--rig R] [--title T] [--var k=v ...]` without --attach. The molecule root is not routed to an agent, promoted, attached to any bead, or de-duplicated.",
+        "operationId": "cook-formula",
+        "parameters": [
+          {
+            "description": "Anti-CSRF header required on mutation requests. Any non-empty value is accepted; the header's presence is what the server checks.",
+            "in": "header",
+            "name": "X-GC-Request",
+            "required": true,
+            "schema": {
+              "description": "Anti-CSRF header required on mutation requests. Any non-empty value is accepted; the header's presence is what the server checks.",
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "description": "City name.",
+            "in": "path",
+            "name": "cityName",
+            "required": true,
+            "schema": {
+              "description": "City name.",
+              "minLength": 1,
+              "pattern": "\\S",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Formula name.",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "Formula name.",
+              "minLength": 1,
+              "pattern": "\\S",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Idempotency key for safe retries: a repeat with the same key and body replays the first cook's result instead of cooking again.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "description": "Idempotency key for safe retries: a repeat with the same key and body replays the first cook's result instead of cooking again.",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FormulaCookInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormulaCookOutputBody"
+                }
+              }
+            },
+            "description": "Created",
+            "headers": {
+              "X-GC-Request-Id": {
+                "$ref": "#/components/headers/X-GC-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Bad Request",
+            "headers": {
+              "X-GC-Request-Id": {
+                "$ref": "#/components/headers/X-GC-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unauthorized",
+            "headers": {
+              "X-GC-Request-Id": {
+                "$ref": "#/components/headers/X-GC-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Forbidden",
+            "headers": {
+              "X-GC-Request-Id": {
+                "$ref": "#/components/headers/X-GC-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Not Found",
+            "headers": {
+              "X-GC-Request-Id": {
+                "$ref": "#/components/headers/X-GC-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Conflict",
+            "headers": {
+              "X-GC-Request-Id": {
+                "$ref": "#/components/headers/X-GC-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unprocessable Entity",
+            "headers": {
+              "X-GC-Request-Id": {
+                "$ref": "#/components/headers/X-GC-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error",
+            "headers": {
+              "X-GC-Request-Id": {
+                "$ref": "#/components/headers/X-GC-Request-Id"
+              }
+            }
+          },
+          "501": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Not Implemented",
+            "headers": {
+              "X-GC-Request-Id": {
+                "$ref": "#/components/headers/X-GC-Request-Id"
+              }
+            }
+          }
+        },
+        "summary": "Cook a formula as a standalone molecule"
       }
     },
     "/v0/city/{cityName}/formulas/{name}/preview": {
