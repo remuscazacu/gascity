@@ -1195,14 +1195,27 @@ func doltliteMetadataFilterPredicates(filters map[string]string) ([]string, []an
 	return where, args
 }
 
+// doltliteMetadataLikePatterns returns the LIKE patterns that find key=value
+// in a metadata JSON document. A value of all digits also matches the
+// unquoted JSON number form: bd's --set-metadata coerces digit strings to
+// numbers, so a bead set with external_ref=2015999 stores
+// "external_ref":2015999, which parseMetadata (and so the Go-side filter)
+// reads back as "2015999". The number form is anchored on the character that
+// must follow a JSON number (',' '}' or whitespace), so 123 never matches 1234.
 func doltliteMetadataLikePatterns(key, value string) []string {
 	keyJSON, _ := json.Marshal(key)
 	valueJSON, _ := json.Marshal(value)
-	fragments := []string{
-		string(keyJSON) + ":" + string(valueJSON),
-		string(keyJSON) + ": " + string(valueJSON),
-		string(keyJSON) + " :" + string(valueJSON),
-		string(keyJSON) + " : " + string(valueJSON),
+	separators := []string{":", ": ", " :", " : "}
+	fragments := make([]string, 0, len(separators))
+	for _, sep := range separators {
+		fragments = append(fragments, string(keyJSON)+sep+string(valueJSON))
+	}
+	if isASCIIDigits(value) {
+		for _, sep := range separators {
+			for _, term := range []string{",", "}", " ", "\n", "\r", "\t"} {
+				fragments = append(fragments, string(keyJSON)+sep+value+term)
+			}
+		}
 	}
 	patterns := make([]string, 0, len(fragments))
 	seen := make(map[string]struct{}, len(fragments))
@@ -1215,6 +1228,18 @@ func doltliteMetadataLikePatterns(key, value string) []string {
 		patterns = append(patterns, pattern)
 	}
 	return patterns
+}
+
+func isASCIIDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func escapeDoltliteLikePattern(s string) string {
