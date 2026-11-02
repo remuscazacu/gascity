@@ -3706,6 +3706,22 @@ func reconcileSessionBeadsTracedWithNamedDemand(
 							continue
 						}
 						if isNamedSessionInfo(infoByID[id]) {
+							// Never restart a named session on config drift while
+							// the city is suspended (sr-pkh5). The reset below
+							// leaves the session start-pending, and the allocator
+							// keeps a pending create through the suspended pass, so
+							// a config reload during `gc suspend` relaunched a named
+							// session the suspend had not yet closed (2026-10-18: an
+							// intake poller 2h17m after suspend). Leave it to the
+							// suspend drain; drift is re-evaluated after resume.
+							if citySuspendedWithState(cfg, suspState) {
+								if trace != nil {
+									trace.RecordDecision(TraceSiteReconcilerConfigDrift, TraceReasonConfigDrift, TraceOutcomeDeferredActive, tp.TemplateName, name, configDriftTracePayload(storedHash, currentHash, driftedFields, traceRecordPayload{
+										"active_reason": "city_suspended",
+									}))
+								}
+								continue
+							}
 							// Defer config-drift restart for named sessions
 							// that are actively in use (pending interaction,
 							// tmux-attached, or recent activity). This prevents

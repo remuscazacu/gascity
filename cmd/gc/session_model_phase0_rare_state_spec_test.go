@@ -169,6 +169,67 @@ func TestPhase0ConfigDrift_IdleNamedSessionRestartsInPlaceWithoutCapVacancy(t *t
 	}
 }
 
+func TestPhase0ConfigDrift_NamedSessionNotRestartedWhileCitySuspended(t *testing.T) {
+	// sr-pkh5: the same idle named session as the restart-in-place test,
+	// but the city is suspended. Config drift must not relaunch it.
+	env := newReconcilerTestEnv(t)
+	env.cfg = &config.City{
+		Workspace: config.Workspace{Name: "test-city", SuspendedOnStart: true},
+		Agents: []config.Agent{{
+			Name:              "worker",
+			StartCommand:      "new-cmd",
+			MaxActiveSessions: intPtr(1),
+		}},
+		NamedSessions: []config.NamedSession{{
+			Template: "worker",
+			Mode:     "always",
+		}},
+	}
+
+	sessionName := config.NamedSessionRuntimeName(env.cfg.Workspace.Name, env.cfg.Workspace, "worker")
+	env.desiredState[sessionName] = TemplateParams{
+		TemplateName:            "worker",
+		InstanceName:            "worker",
+		Alias:                   "worker",
+		Command:                 "new-cmd",
+		ConfiguredNamedIdentity: "worker",
+		ConfiguredNamedMode:     "always",
+	}
+
+	oldRuntime := runtime.Config{Command: "old-cmd"}
+	if err := env.sp.Start(context.Background(), sessionName, oldRuntime); err != nil {
+		t.Fatalf("Start(old runtime): %v", err)
+	}
+	// NOT attached, no recent activity -- session is idle.
+
+	session := env.createSessionBead(sessionName, "worker")
+	env.markSessionActive(&session)
+	env.setSessionMetadata(&session, map[string]string{
+		namedSessionMetadataKey:      "true",
+		namedSessionIdentityMetadata: "worker",
+		namedSessionModeMetadata:     "always",
+		"session_key":                "old-provider-conversation",
+		"started_config_hash":        runtime.CoreFingerprint(oldRuntime),
+		"started_live_hash":          runtime.LiveFingerprint(oldRuntime),
+	})
+
+	env.reconcile([]beads.Bead{session})
+
+	all, err := env.store.ListByLabel(sessionBeadLabel, 0)
+	if err != nil {
+		t.Fatalf("ListByLabel(session): %v", err)
+	}
+	if len(all) != 1 {
+		t.Fatalf("session bead count = %d, want 1; beads=%v", len(all), all)
+	}
+	if got := all[0].Metadata["started_config_hash"]; got != runtime.CoreFingerprint(oldRuntime) {
+		t.Fatalf("started_config_hash = %q, want the old hash: a suspended city must not relaunch on config drift", got)
+	}
+	if got := all[0].Metadata["state"]; got == string(sessionpkg.StateStartPending) {
+		t.Fatalf("state = %q: a suspended city must not leave a drifted named session start-pending", got)
+	}
+}
+
 func TestPhase0ConfigDrift_NamedSessionBoundsRecentActivityDeferral(t *testing.T) {
 	// Recent activity is a headless-use signal, but it must not let a live
 	// process loop hide one fixed config-drift episode forever.
