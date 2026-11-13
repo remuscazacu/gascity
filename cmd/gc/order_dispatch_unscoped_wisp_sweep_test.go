@@ -452,7 +452,7 @@ func TestSweepStaleOrderTrackingUnscopedWispsHonorSeparateStaleBound(t *testing.
 	inside := root.CreatedAt.Add(unscopedOrderWispStaleAfter / 2)
 
 	result, err := sweepStaleOrderTrackingWithOptionsLimitMode(
-		store, inside, 10*time.Minute, nil, orderTrackingSweepMetadataInitiator, true, 0, false,
+		store, inside, 10*time.Minute, nil, orderTrackingSweepMetadataInitiator, true, 0, false, staleTrackingReadNotClosed,
 	)
 	if err != nil {
 		t.Fatalf("sweepStaleOrderTrackingWithOptionsLimitMode: %v", err)
@@ -463,7 +463,7 @@ func TestSweepStaleOrderTrackingUnscopedWispsHonorSeparateStaleBound(t *testing.
 
 	// Past the wisp bound it is drained.
 	result, err = sweepStaleOrderTrackingWithOptionsLimitMode(
-		store, root.CreatedAt.Add(unscopedOrderWispStaleAfter+time.Hour), 10*time.Minute, nil, orderTrackingSweepMetadataInitiator, true, 0, false,
+		store, root.CreatedAt.Add(unscopedOrderWispStaleAfter+time.Hour), 10*time.Minute, nil, orderTrackingSweepMetadataInitiator, true, 0, false, staleTrackingReadNotClosed,
 	)
 	if err != nil {
 		t.Fatalf("sweepStaleOrderTrackingWithOptionsLimitMode(past bound): %v", err)
