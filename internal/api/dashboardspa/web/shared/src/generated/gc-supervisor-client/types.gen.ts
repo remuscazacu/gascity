@@ -343,6 +343,7 @@ export type Bead = {
     dependencies?: Array<Dep> | null;
     description?: string;
     ephemeral?: boolean;
+    external_ref?: string;
     from?: string;
     id: string;
     is_blocked?: boolean;
@@ -414,6 +415,10 @@ export type BeadCreateInputBody = {
      * Bead description.
      */
     description?: string;
+    /**
+     * Top-level external reference (e.g. an external ticket number), stored in the bead's external_ref field.
+     */
+    external_ref?: string;
     /**
      * Bead labels.
      */
@@ -1399,7 +1404,7 @@ export type EventEmitRequest = {
     type: string;
 };
 
-export type EventPayload = AdapterEventPayload | AgentClaimsPayload | BackendCredentialResolvedPayload | BeadClaimFailedPayload | BeadClaimLoopHeldPayload | BeadClaimRejectedPayload | BeadClaimReleasedPayload | BeadDeadAssigneeReopenedPayload | BeadEventPayload | BeadWorktreeReapSkippedPayload | BeadWorktreeReapedPayload | BlockedRecomputedPayload | BoundEventPayload | CityCreateSucceededPayload | CityLifecyclePayload | CityUnregisterSucceededPayload | ConditionalWritesDegradedPayload | ControlCheckUnlaunchablePayload | ControlDispatcherScopeGapPayload | ControlRootSettleFailedPayload | ControlStalledPayload | ExecutionClaimWindowExpiredPayload | ExecutionStepStalledPayload | FactRecordedPayload | GroupCreatedEventPayload | HookClaimReclaimedStalePayload | InboundEventPayload | MailEventPayload | MoleculeResolvedPayload | NoPayload | OpChangedPayload | OpsRecordingDegradedPayload | OrderInapplicablePayload | OrderSkippedPayload | OrderSuppressedPayload | OutboundChannelMismatchPayload | OutboundEventPayload | ProjectIdentityStampedPayload | Record | RequestAcceptedPayload | RequestFailedPayload | RigCreateSucceededPayload | RigProvisionProgressPayload | RotatedPayload | SessionClosedPayload | SessionConfigDriftDeferredPayload | SessionCreateSucceededPayload | SessionCreatedPayload | SessionDemandClaimDivergencePayload | SessionDrainAckedWithAssignedWorkPayload | SessionLifecyclePayload | SessionMessageSucceededPayload | SessionPendingClearedPayload | SessionPendingPayload | SessionPoolSlotRetiredAtDrainDeadlinePayload | SessionProgramStatusShadowPayload | SessionResetStalledPayload | SessionStrandedClaimsPayload | SessionStrandedPayload | SessionSubmitSucceededPayload | SessionUnknownStatePayload | SessionWakeRefusedPayload | StorageBindingOutcomePayload | StorageRigPayload | StoreDiskCriticalPayload | StoreDiskWarnPayload | StoreMaintenanceDonePayload | StoreMaintenanceFailedPayload | SupervisorFsPressureSkippedTickPayload | SupervisorRequestPayload | SupervisorShutdownPayload | SupervisorStartedPayload | UnboundEventPayload | WebhookReceivedPayload | WebhookRejectedPayload | WorkLadderPayload | WorkRateLimitedPayload | WorkerOperationEventPayload;
+export type EventPayload = AdapterEventPayload | AgentClaimsPayload | BackendCredentialResolvedPayload | BeadClaimFailedPayload | BeadClaimLoopHeldPayload | BeadClaimRejectedPayload | BeadClaimReleasedPayload | BeadDeadAssigneeReopenedPayload | BeadEventPayload | BeadWorktreeReapSkippedPayload | BeadWorktreeReapedPayload | BlockedRecomputedPayload | BoundEventPayload | CityCreateSucceededPayload | CityLifecyclePayload | CityUnregisterSucceededPayload | ConditionalWritesDegradedPayload | ControlCheckUnlaunchablePayload | ControlDispatcherScopeGapPayload | ControlRootSettleFailedPayload | ControlStalledPayload | ExecutionClaimWindowExpiredPayload | ExecutionStepStalledPayload | FactRecordedPayload | GroupCreatedEventPayload | HookClaimReclaimedStalePayload | InboundEventPayload | MailEventPayload | MoleculeResolvedPayload | NoPayload | OpChangedPayload | OpsRecordingDegradedPayload | OrderInapplicablePayload | OrderSkippedPayload | OrderSuppressedPayload | OutboundChannelMismatchPayload | OutboundEventPayload | ProjectIdentityStampedPayload | Record | RequestAcceptedPayload | RequestFailedPayload | RigCreateSucceededPayload | RigProvisionProgressPayload | RotatedPayload | SessionClosedPayload | SessionConfigDriftDeferredPayload | SessionCreateSucceededPayload | SessionCreatedPayload | SessionDemandClaimDivergencePayload | SessionDrainAckedWithAssignedWorkPayload | SessionLifecyclePayload | SessionMessageSucceededPayload | SessionPendingClearedPayload | SessionPendingPayload | SessionPoolSlotRetiredAtDrainDeadlinePayload | SessionProgramStatusShadowPayload | SessionProviderLimitClearedPayload | SessionProviderLimitedPayload | SessionResetStalledPayload | SessionStrandedClaimsPayload | SessionStrandedPayload | SessionSubmitSucceededPayload | SessionUnknownStatePayload | SessionWakeRefusedPayload | StorageBindingOutcomePayload | StorageRigPayload | StoreDiskCriticalPayload | StoreDiskWarnPayload | StoreMaintenanceDonePayload | StoreMaintenanceFailedPayload | SupervisorFsPressureSkippedTickPayload | SupervisorRequestPayload | SupervisorShutdownPayload | SupervisorStartedPayload | UnboundEventPayload | WebhookReceivedPayload | WebhookRejectedPayload | WorkLadderPayload | WorkRateLimitedPayload | WorkerOperationEventPayload;
 
 export type EventRotateAnchor = {
     /**
@@ -1747,6 +1752,40 @@ export type FanoutPolicy = {
     Enabled: boolean;
     MaxPeerTriggeredPublishes: number;
     MaxTotalPeerDeliveries: number;
+};
+
+export type FormulaCookInputBody = {
+    /**
+     * Rig whose store receives the molecule (the CLI's --rig). Empty means city scope.
+     */
+    rig?: string;
+    /**
+     * Override the root bead title (the CLI's --title).
+     */
+    title?: string;
+    /**
+     * Formula variables (the CLI's repeated --var key=value).
+     */
+    vars?: {
+        [key: string]: string;
+    };
+};
+
+export type FormulaCookOutputBody = {
+    /**
+     * Number of beads created.
+     */
+    created: number;
+    /**
+     * Formula step ID to created bead ID.
+     */
+    id_mapping?: {
+        [key: string]: string;
+    };
+    /**
+     * ID of the created molecule root.
+     */
+    root_id: string;
 };
 
 export type FormulaDetailResponse = {
@@ -3250,6 +3289,7 @@ export type ReadyBead = {
     dependencies?: Array<ReadyBeadDep> | null;
     description?: string;
     ephemeral?: boolean;
+    external_ref?: string;
     from?: string;
     id: string;
     is_blocked?: boolean;
@@ -4300,6 +4340,56 @@ export type SessionProgramStatusShadowPayload = {
      * The record reading's validity.
      */
     validity: 'unread' | 'valid' | 'not_armed' | 'silent' | 'cleared' | 'reader_lost' | 'exited';
+};
+
+export type SessionProviderLimitClearedPayload = {
+    /**
+     * Provider the session runs, when known.
+     */
+    provider?: string;
+    /**
+     * Why it cleared: resumed (the live session no longer shows the hold) or session_gone (the session stopped while parked).
+     */
+    reason: 'resumed' | 'session_gone';
+    /**
+     * Session bead ID from the matching session.provider_limited.
+     */
+    session_id: string;
+    /**
+     * Session runtime name, when known.
+     */
+    session_name?: string;
+    /**
+     * Session template, when known.
+     */
+    template?: string;
+    /**
+     * Reset time the cleared hold had recorded (RFC3339 UTC), when known.
+     */
+    until?: string;
+};
+
+export type SessionProviderLimitedPayload = {
+    /**
+     * Provider the session runs, when known.
+     */
+    provider?: string;
+    /**
+     * Session bead ID.
+     */
+    session_id: string;
+    /**
+     * Session runtime name, when known.
+     */
+    session_name?: string;
+    /**
+     * Session template, when known.
+     */
+    template?: string;
+    /**
+     * Reset time the provider stated (RFC3339 UTC); empty when the hold text named no parseable reset.
+     */
+    until?: string;
 };
 
 /**
@@ -6873,6 +6963,10 @@ export type TypedEventStreamEnvelope = ({
 } & TypedEventStreamEnvelopeSessionPoolSlotRetiredAtDrainDeadline) | ({
     type: 'session.program_status_shadow';
 } & TypedEventStreamEnvelopeSessionProgramStatusShadow) | ({
+    type: 'session.provider_limit_cleared';
+} & TypedEventStreamEnvelopeSessionProviderLimitCleared) | ({
+    type: 'session.provider_limited';
+} & TypedEventStreamEnvelopeSessionProviderLimited) | ({
     type: 'session.quarantined';
 } & TypedEventStreamEnvelopeSessionQuarantined) | ({
     type: 'session.reset_stalled';
@@ -8693,6 +8787,42 @@ export type TypedEventStreamEnvelopeSessionProgramStatusShadow = {
 };
 
 /**
+ * TypedEventStreamEnvelope session.provider_limit_cleared
+ */
+export type TypedEventStreamEnvelopeSessionProviderLimitCleared = {
+    actor: string;
+    depends_on_step_ids?: Array<string>;
+    message?: string;
+    payload: SessionProviderLimitClearedPayload;
+    run_id?: string;
+    seq: number;
+    session_id?: string;
+    step_id?: string;
+    subject?: string;
+    ts: string;
+    type: 'session.provider_limit_cleared';
+    workflow?: WorkflowEventProjection;
+};
+
+/**
+ * TypedEventStreamEnvelope session.provider_limited
+ */
+export type TypedEventStreamEnvelopeSessionProviderLimited = {
+    actor: string;
+    depends_on_step_ids?: Array<string>;
+    message?: string;
+    payload: SessionProviderLimitedPayload;
+    run_id?: string;
+    seq: number;
+    session_id?: string;
+    step_id?: string;
+    subject?: string;
+    ts: string;
+    type: 'session.provider_limited';
+    workflow?: WorkflowEventProjection;
+};
+
+/**
  * TypedEventStreamEnvelope session.quarantined
  */
 export type TypedEventStreamEnvelopeSessionQuarantined = {
@@ -9520,6 +9650,10 @@ export type TypedTaggedEventStreamEnvelope = ({
 } & TypedTaggedEventStreamEnvelopeSessionPoolSlotRetiredAtDrainDeadline) | ({
     type: 'session.program_status_shadow';
 } & TypedTaggedEventStreamEnvelopeSessionProgramStatusShadow) | ({
+    type: 'session.provider_limit_cleared';
+} & TypedTaggedEventStreamEnvelopeSessionProviderLimitCleared) | ({
+    type: 'session.provider_limited';
+} & TypedTaggedEventStreamEnvelopeSessionProviderLimited) | ({
     type: 'session.quarantined';
 } & TypedTaggedEventStreamEnvelopeSessionQuarantined) | ({
     type: 'session.reset_stalled';
@@ -11433,6 +11567,44 @@ export type TypedTaggedEventStreamEnvelopeSessionProgramStatusShadow = {
     subject?: string;
     ts: string;
     type: 'session.program_status_shadow';
+    workflow?: WorkflowEventProjection;
+};
+
+/**
+ * TypedTaggedEventStreamEnvelope session.provider_limit_cleared
+ */
+export type TypedTaggedEventStreamEnvelopeSessionProviderLimitCleared = {
+    actor: string;
+    city: string;
+    depends_on_step_ids?: Array<string>;
+    message?: string;
+    payload: SessionProviderLimitClearedPayload;
+    run_id?: string;
+    seq: number;
+    session_id?: string;
+    step_id?: string;
+    subject?: string;
+    ts: string;
+    type: 'session.provider_limit_cleared';
+    workflow?: WorkflowEventProjection;
+};
+
+/**
+ * TypedTaggedEventStreamEnvelope session.provider_limited
+ */
+export type TypedTaggedEventStreamEnvelopeSessionProviderLimited = {
+    actor: string;
+    city: string;
+    depends_on_step_ids?: Array<string>;
+    message?: string;
+    payload: SessionProviderLimitedPayload;
+    run_id?: string;
+    seq: number;
+    session_id?: string;
+    step_id?: string;
+    subject?: string;
+    ts: string;
+    type: 'session.provider_limited';
     workflow?: WorkflowEventProjection;
 };
 
@@ -14242,6 +14414,10 @@ export type GetV0CityByCityNameBeadsData = {
          * Include closed beads.
          */
         all?: boolean;
+        /**
+         * Return beads whose top-level external_ref OR metadata.external_ref equals this value (union, de-duplicated by id). Combine with all=true to include closed beads.
+         */
+        external_ref?: string;
     };
     url: '/v0/city/{cityName}/beads';
 };
@@ -16509,6 +16685,78 @@ export type PutV0CityByCityNameFormulasByNameResponses = {
 };
 
 export type PutV0CityByCityNameFormulasByNameResponse = PutV0CityByCityNameFormulasByNameResponses[keyof PutV0CityByCityNameFormulasByNameResponses];
+
+export type CookFormulaData = {
+    body: FormulaCookInputBody;
+    headers: {
+        /**
+         * Anti-CSRF header required on mutation requests. Any non-empty value is accepted; the header's presence is what the server checks.
+         */
+        'X-GC-Request': string;
+        /**
+         * Idempotency key for safe retries: a repeat with the same key and body replays the first cook's result instead of cooking again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        /**
+         * City name.
+         */
+        cityName: string;
+        /**
+         * Formula name.
+         */
+        name: string;
+    };
+    query?: never;
+    url: '/v0/city/{cityName}/formulas/{name}/cook';
+};
+
+export type CookFormulaErrors = {
+    /**
+     * Bad Request
+     */
+    400: ErrorModel;
+    /**
+     * Unauthorized
+     */
+    401: ErrorModel;
+    /**
+     * Forbidden
+     */
+    403: ErrorModel;
+    /**
+     * Not Found
+     */
+    404: ErrorModel;
+    /**
+     * Conflict
+     */
+    409: ErrorModel;
+    /**
+     * Unprocessable Entity
+     */
+    422: ErrorModel;
+    /**
+     * Internal Server Error
+     */
+    500: ErrorModel;
+    /**
+     * Not Implemented
+     */
+    501: ErrorModel;
+};
+
+export type CookFormulaError = CookFormulaErrors[keyof CookFormulaErrors];
+
+export type CookFormulaResponses = {
+    /**
+     * Created
+     */
+    201: FormulaCookOutputBody;
+};
+
+export type CookFormulaResponse = CookFormulaResponses[keyof CookFormulaResponses];
 
 export type PostV0CityByCityNameFormulasByNamePreviewData = {
     body: FormulaPreviewBody;

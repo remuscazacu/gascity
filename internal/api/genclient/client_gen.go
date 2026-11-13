@@ -830,19 +830,19 @@ func (e RunStepStatus) Valid() bool {
 
 // Defines values for SessionPendingClearedPayloadReason.
 const (
-	Replaced    SessionPendingClearedPayloadReason = "replaced"
-	Resolved    SessionPendingClearedPayloadReason = "resolved"
-	SessionGone SessionPendingClearedPayloadReason = "session_gone"
+	SessionPendingClearedPayloadReasonReplaced    SessionPendingClearedPayloadReason = "replaced"
+	SessionPendingClearedPayloadReasonResolved    SessionPendingClearedPayloadReason = "resolved"
+	SessionPendingClearedPayloadReasonSessionGone SessionPendingClearedPayloadReason = "session_gone"
 )
 
 // Valid indicates whether the value is a known member of the SessionPendingClearedPayloadReason enum.
 func (e SessionPendingClearedPayloadReason) Valid() bool {
 	switch e {
-	case Replaced:
+	case SessionPendingClearedPayloadReasonReplaced:
 		return true
-	case Resolved:
+	case SessionPendingClearedPayloadReasonResolved:
 		return true
-	case SessionGone:
+	case SessionPendingClearedPayloadReasonSessionGone:
 		return true
 	default:
 		return false
@@ -1149,6 +1149,24 @@ func (e SessionProgramStatusShadowPayloadValidity) Valid() bool {
 	case Unread:
 		return true
 	case Valid:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SessionProviderLimitClearedPayloadReason.
+const (
+	SessionProviderLimitClearedPayloadReasonResumed     SessionProviderLimitClearedPayloadReason = "resumed"
+	SessionProviderLimitClearedPayloadReasonSessionGone SessionProviderLimitClearedPayloadReason = "session_gone"
+)
+
+// Valid indicates whether the value is a known member of the SessionProviderLimitClearedPayloadReason enum.
+func (e SessionProviderLimitClearedPayloadReason) Valid() bool {
+	switch e {
+	case SessionProviderLimitClearedPayloadReasonResumed:
+		return true
+	case SessionProviderLimitClearedPayloadReasonSessionGone:
 		return true
 	default:
 		return false
@@ -2385,6 +2403,7 @@ type Bead struct {
 	Dependencies *[]Dep             `json:"dependencies,omitempty"`
 	Description  *string            `json:"description,omitempty"`
 	Ephemeral    *bool              `json:"ephemeral,omitempty"`
+	ExternalRef  *string            `json:"external_ref,omitempty"`
 	From         *string            `json:"from,omitempty"`
 	Id           string             `json:"id"`
 	IsBlocked    *bool              `json:"is_blocked,omitempty"`
@@ -2453,6 +2472,9 @@ type BeadCreateInputBody struct {
 
 	// Description Bead description.
 	Description *string `json:"description,omitempty"`
+
+	// ExternalRef Top-level external reference (e.g. an external ticket number), stored in the bead's external_ref field.
+	ExternalRef *string `json:"external_ref,omitempty"`
 
 	// Labels Bead labels.
 	Labels *[]string `json:"labels,omitempty"`
@@ -3615,6 +3637,30 @@ type FanoutPolicy struct {
 	Enabled                    bool  `json:"Enabled"`
 	MaxPeerTriggeredPublishes  int64 `json:"MaxPeerTriggeredPublishes"`
 	MaxTotalPeerDeliveries     int64 `json:"MaxTotalPeerDeliveries"`
+}
+
+// FormulaCookInputBody defines model for FormulaCookInputBody.
+type FormulaCookInputBody struct {
+	// Rig Rig whose store receives the molecule (the CLI's --rig). Empty means city scope.
+	Rig *string `json:"rig,omitempty"`
+
+	// Title Override the root bead title (the CLI's --title).
+	Title *string `json:"title,omitempty"`
+
+	// Vars Formula variables (the CLI's repeated --var key=value).
+	Vars *map[string]string `json:"vars,omitempty"`
+}
+
+// FormulaCookOutputBody defines model for FormulaCookOutputBody.
+type FormulaCookOutputBody struct {
+	// Created Number of beads created.
+	Created int64 `json:"created"`
+
+	// IdMapping Formula step ID to created bead ID.
+	IdMapping *map[string]string `json:"id_mapping,omitempty"`
+
+	// RootId ID of the created molecule root.
+	RootId string `json:"root_id"`
 }
 
 // FormulaDetailResponse defines model for FormulaDetailResponse.
@@ -4920,6 +4966,7 @@ type ReadyBead struct {
 	Dependencies *[]ReadyBeadDep     `json:"dependencies,omitempty"`
 	Description  *string             `json:"description,omitempty"`
 	Ephemeral    *bool               `json:"ephemeral,omitempty"`
+	ExternalRef  *string             `json:"external_ref,omitempty"`
 	From         *string             `json:"from,omitempty"`
 	Id           string              `json:"id"`
 	IsBlocked    *bool               `json:"is_blocked,omitempty"`
@@ -5797,6 +5844,48 @@ type SessionProgramStatusShadowPayloadState string
 
 // SessionProgramStatusShadowPayloadValidity The record reading's validity.
 type SessionProgramStatusShadowPayloadValidity string
+
+// SessionProviderLimitClearedPayload defines model for SessionProviderLimitClearedPayload.
+type SessionProviderLimitClearedPayload struct {
+	// Provider Provider the session runs, when known.
+	Provider *string `json:"provider,omitempty"`
+
+	// Reason Why it cleared: resumed (the live session no longer shows the hold) or session_gone (the session stopped while parked).
+	Reason SessionProviderLimitClearedPayloadReason `json:"reason"`
+
+	// SessionId Session bead ID from the matching session.provider_limited.
+	SessionId string `json:"session_id"`
+
+	// SessionName Session runtime name, when known.
+	SessionName *string `json:"session_name,omitempty"`
+
+	// Template Session template, when known.
+	Template *string `json:"template,omitempty"`
+
+	// Until Reset time the cleared hold had recorded (RFC3339 UTC), when known.
+	Until *string `json:"until,omitempty"`
+}
+
+// SessionProviderLimitClearedPayloadReason Why it cleared: resumed (the live session no longer shows the hold) or session_gone (the session stopped while parked).
+type SessionProviderLimitClearedPayloadReason string
+
+// SessionProviderLimitedPayload defines model for SessionProviderLimitedPayload.
+type SessionProviderLimitedPayload struct {
+	// Provider Provider the session runs, when known.
+	Provider *string `json:"provider,omitempty"`
+
+	// SessionId Session bead ID.
+	SessionId string `json:"session_id"`
+
+	// SessionName Session runtime name, when known.
+	SessionName *string `json:"session_name,omitempty"`
+
+	// Template Session template, when known.
+	Template *string `json:"template,omitempty"`
+
+	// Until Reset time the provider stated (RFC3339 UTC); empty when the hold text named no parseable reset.
+	Until *string `json:"until,omitempty"`
+}
 
 // SessionRawMessageFrame Provider-native transcript frame. Gas City forwards the exact JSON the provider wrote to its session log, so the shape is provider-specific and can be any JSON value. The producing provider is identified by the Provider field on the enclosing envelope; consumers dispatch per-provider frame parsing keyed by that identifier.
 type SessionRawMessageFrame = interface{}
@@ -9312,6 +9401,38 @@ type TypedEventStreamEnvelopeSessionProgramStatusShadow struct {
 	Workflow         *WorkflowEventProjection          `json:"workflow,omitempty"`
 }
 
+// TypedEventStreamEnvelopeSessionProviderLimitCleared defines model for TypedEventStreamEnvelopeSessionProviderLimitCleared.
+type TypedEventStreamEnvelopeSessionProviderLimitCleared struct {
+	Actor            string                             `json:"actor"`
+	DependsOnStepIds *[]string                          `json:"depends_on_step_ids,omitempty"`
+	Message          *string                            `json:"message,omitempty"`
+	Payload          SessionProviderLimitClearedPayload `json:"payload"`
+	RunId            *string                            `json:"run_id,omitempty"`
+	Seq              int64                              `json:"seq"`
+	SessionId        *string                            `json:"session_id,omitempty"`
+	StepId           *string                            `json:"step_id,omitempty"`
+	Subject          *string                            `json:"subject,omitempty"`
+	Ts               time.Time                          `json:"ts"`
+	Type             string                             `json:"type"`
+	Workflow         *WorkflowEventProjection           `json:"workflow,omitempty"`
+}
+
+// TypedEventStreamEnvelopeSessionProviderLimited defines model for TypedEventStreamEnvelopeSessionProviderLimited.
+type TypedEventStreamEnvelopeSessionProviderLimited struct {
+	Actor            string                        `json:"actor"`
+	DependsOnStepIds *[]string                     `json:"depends_on_step_ids,omitempty"`
+	Message          *string                       `json:"message,omitempty"`
+	Payload          SessionProviderLimitedPayload `json:"payload"`
+	RunId            *string                       `json:"run_id,omitempty"`
+	Seq              int64                         `json:"seq"`
+	SessionId        *string                       `json:"session_id,omitempty"`
+	StepId           *string                       `json:"step_id,omitempty"`
+	Subject          *string                       `json:"subject,omitempty"`
+	Ts               time.Time                     `json:"ts"`
+	Type             string                        `json:"type"`
+	Workflow         *WorkflowEventProjection      `json:"workflow,omitempty"`
+}
+
 // TypedEventStreamEnvelopeSessionQuarantined defines model for TypedEventStreamEnvelopeSessionQuarantined.
 type TypedEventStreamEnvelopeSessionQuarantined struct {
 	Actor            string                   `json:"actor"`
@@ -11526,6 +11647,40 @@ type TypedTaggedEventStreamEnvelopeSessionProgramStatusShadow struct {
 	Workflow         *WorkflowEventProjection          `json:"workflow,omitempty"`
 }
 
+// TypedTaggedEventStreamEnvelopeSessionProviderLimitCleared defines model for TypedTaggedEventStreamEnvelopeSessionProviderLimitCleared.
+type TypedTaggedEventStreamEnvelopeSessionProviderLimitCleared struct {
+	Actor            string                             `json:"actor"`
+	City             string                             `json:"city"`
+	DependsOnStepIds *[]string                          `json:"depends_on_step_ids,omitempty"`
+	Message          *string                            `json:"message,omitempty"`
+	Payload          SessionProviderLimitClearedPayload `json:"payload"`
+	RunId            *string                            `json:"run_id,omitempty"`
+	Seq              int64                              `json:"seq"`
+	SessionId        *string                            `json:"session_id,omitempty"`
+	StepId           *string                            `json:"step_id,omitempty"`
+	Subject          *string                            `json:"subject,omitempty"`
+	Ts               time.Time                          `json:"ts"`
+	Type             string                             `json:"type"`
+	Workflow         *WorkflowEventProjection           `json:"workflow,omitempty"`
+}
+
+// TypedTaggedEventStreamEnvelopeSessionProviderLimited defines model for TypedTaggedEventStreamEnvelopeSessionProviderLimited.
+type TypedTaggedEventStreamEnvelopeSessionProviderLimited struct {
+	Actor            string                        `json:"actor"`
+	City             string                        `json:"city"`
+	DependsOnStepIds *[]string                     `json:"depends_on_step_ids,omitempty"`
+	Message          *string                       `json:"message,omitempty"`
+	Payload          SessionProviderLimitedPayload `json:"payload"`
+	RunId            *string                       `json:"run_id,omitempty"`
+	Seq              int64                         `json:"seq"`
+	SessionId        *string                       `json:"session_id,omitempty"`
+	StepId           *string                       `json:"step_id,omitempty"`
+	Subject          *string                       `json:"subject,omitempty"`
+	Ts               time.Time                     `json:"ts"`
+	Type             string                        `json:"type"`
+	Workflow         *WorkflowEventProjection      `json:"workflow,omitempty"`
+}
+
 // TypedTaggedEventStreamEnvelopeSessionQuarantined defines model for TypedTaggedEventStreamEnvelopeSessionQuarantined.
 type TypedTaggedEventStreamEnvelopeSessionQuarantined struct {
 	Actor            string                   `json:"actor"`
@@ -12728,6 +12883,9 @@ type GetV0CityByCityNameBeadsParams struct {
 
 	// All Include closed beads.
 	All *bool `form:"all,omitempty" json:"all,omitempty"`
+
+	// ExternalRef Return beads whose top-level external_ref OR metadata.external_ref equals this value (union, de-duplicated by id). Combine with all=true to include closed beads.
+	ExternalRef *string `form:"external_ref,omitempty" json:"external_ref,omitempty"`
 }
 
 // CreateBeadParams defines parameters for CreateBead.
@@ -13022,6 +13180,15 @@ type GetV0CityByCityNameFormulasByNameParams struct {
 type PutV0CityByCityNameFormulasByNameParams struct {
 	// XGCRequest Anti-CSRF header required on mutation requests. Any non-empty value is accepted; the header's presence is what the server checks.
 	XGCRequest string `json:"X-GC-Request"`
+}
+
+// CookFormulaParams defines parameters for CookFormula.
+type CookFormulaParams struct {
+	// XGCRequest Anti-CSRF header required on mutation requests. Any non-empty value is accepted; the header's presence is what the server checks.
+	XGCRequest string `json:"X-GC-Request"`
+
+	// IdempotencyKey Idempotency key for safe retries: a repeat with the same key and body replays the first cook's result instead of cooking again.
+	IdempotencyKey *string `json:"Idempotency-Key,omitempty"`
 }
 
 // PostV0CityByCityNameFormulasByNamePreviewParams defines parameters for PostV0CityByCityNameFormulasByNamePreview.
@@ -13818,6 +13985,9 @@ type PostV0CityByCityNameExtmsgTranscriptAckJSONRequestBody = ExtMsgTranscriptAc
 
 // PostV0CityByCityNameExtmsgUnbindJSONRequestBody defines body for PostV0CityByCityNameExtmsgUnbind for application/json ContentType.
 type PostV0CityByCityNameExtmsgUnbindJSONRequestBody = ExtMsgUnbindInputBody
+
+// CookFormulaJSONRequestBody defines body for CookFormula for application/json ContentType.
+type CookFormulaJSONRequestBody = FormulaCookInputBody
 
 // PostV0CityByCityNameFormulasByNamePreviewJSONRequestBody defines body for PostV0CityByCityNameFormulasByNamePreview for application/json ContentType.
 type PostV0CityByCityNameFormulasByNamePreviewJSONRequestBody = FormulaPreviewBody
@@ -15402,6 +15572,58 @@ func (t *EventPayload) FromSessionProgramStatusShadowPayload(v SessionProgramSta
 
 // MergeSessionProgramStatusShadowPayload performs a merge with any union data inside the EventPayload, using the provided SessionProgramStatusShadowPayload
 func (t *EventPayload) MergeSessionProgramStatusShadowPayload(v SessionProgramStatusShadowPayload) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsSessionProviderLimitClearedPayload returns the union data inside the EventPayload as a SessionProviderLimitClearedPayload
+func (t EventPayload) AsSessionProviderLimitClearedPayload() (SessionProviderLimitClearedPayload, error) {
+	var body SessionProviderLimitClearedPayload
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSessionProviderLimitClearedPayload overwrites any union data inside the EventPayload as the provided SessionProviderLimitClearedPayload
+func (t *EventPayload) FromSessionProviderLimitClearedPayload(v SessionProviderLimitClearedPayload) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeSessionProviderLimitClearedPayload performs a merge with any union data inside the EventPayload, using the provided SessionProviderLimitClearedPayload
+func (t *EventPayload) MergeSessionProviderLimitClearedPayload(v SessionProviderLimitClearedPayload) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsSessionProviderLimitedPayload returns the union data inside the EventPayload as a SessionProviderLimitedPayload
+func (t EventPayload) AsSessionProviderLimitedPayload() (SessionProviderLimitedPayload, error) {
+	var body SessionProviderLimitedPayload
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSessionProviderLimitedPayload overwrites any union data inside the EventPayload as the provided SessionProviderLimitedPayload
+func (t *EventPayload) FromSessionProviderLimitedPayload(v SessionProviderLimitedPayload) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeSessionProviderLimitedPayload performs a merge with any union data inside the EventPayload, using the provided SessionProviderLimitedPayload
+func (t *EventPayload) MergeSessionProviderLimitedPayload(v SessionProviderLimitedPayload) error {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -20373,6 +20595,62 @@ func (t *TypedEventStreamEnvelope) MergeTypedEventStreamEnvelopeSessionProgramSt
 	return err
 }
 
+// AsTypedEventStreamEnvelopeSessionProviderLimitCleared returns the union data inside the TypedEventStreamEnvelope as a TypedEventStreamEnvelopeSessionProviderLimitCleared
+func (t TypedEventStreamEnvelope) AsTypedEventStreamEnvelopeSessionProviderLimitCleared() (TypedEventStreamEnvelopeSessionProviderLimitCleared, error) {
+	var body TypedEventStreamEnvelopeSessionProviderLimitCleared
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromTypedEventStreamEnvelopeSessionProviderLimitCleared overwrites any union data inside the TypedEventStreamEnvelope as the provided TypedEventStreamEnvelopeSessionProviderLimitCleared
+func (t *TypedEventStreamEnvelope) FromTypedEventStreamEnvelopeSessionProviderLimitCleared(v TypedEventStreamEnvelopeSessionProviderLimitCleared) error {
+	v.Type = "session.provider_limit_cleared"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeTypedEventStreamEnvelopeSessionProviderLimitCleared performs a merge with any union data inside the TypedEventStreamEnvelope, using the provided TypedEventStreamEnvelopeSessionProviderLimitCleared
+func (t *TypedEventStreamEnvelope) MergeTypedEventStreamEnvelopeSessionProviderLimitCleared(v TypedEventStreamEnvelopeSessionProviderLimitCleared) error {
+	v.Type = "session.provider_limit_cleared"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsTypedEventStreamEnvelopeSessionProviderLimited returns the union data inside the TypedEventStreamEnvelope as a TypedEventStreamEnvelopeSessionProviderLimited
+func (t TypedEventStreamEnvelope) AsTypedEventStreamEnvelopeSessionProviderLimited() (TypedEventStreamEnvelopeSessionProviderLimited, error) {
+	var body TypedEventStreamEnvelopeSessionProviderLimited
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromTypedEventStreamEnvelopeSessionProviderLimited overwrites any union data inside the TypedEventStreamEnvelope as the provided TypedEventStreamEnvelopeSessionProviderLimited
+func (t *TypedEventStreamEnvelope) FromTypedEventStreamEnvelopeSessionProviderLimited(v TypedEventStreamEnvelopeSessionProviderLimited) error {
+	v.Type = "session.provider_limited"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeTypedEventStreamEnvelopeSessionProviderLimited performs a merge with any union data inside the TypedEventStreamEnvelope, using the provided TypedEventStreamEnvelopeSessionProviderLimited
+func (t *TypedEventStreamEnvelope) MergeTypedEventStreamEnvelopeSessionProviderLimited(v TypedEventStreamEnvelopeSessionProviderLimited) error {
+	v.Type = "session.provider_limited"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 // AsTypedEventStreamEnvelopeSessionQuarantined returns the union data inside the TypedEventStreamEnvelope as a TypedEventStreamEnvelopeSessionQuarantined
 func (t TypedEventStreamEnvelope) AsTypedEventStreamEnvelopeSessionQuarantined() (TypedEventStreamEnvelopeSessionQuarantined, error) {
 	var body TypedEventStreamEnvelopeSessionQuarantined
@@ -21589,6 +21867,10 @@ func (t TypedEventStreamEnvelope) ValueByDiscriminator() (interface{}, error) {
 		return t.AsTypedEventStreamEnvelopeSessionPoolSlotRetiredAtDrainDeadline()
 	case "session.program_status_shadow":
 		return t.AsTypedEventStreamEnvelopeSessionProgramStatusShadow()
+	case "session.provider_limit_cleared":
+		return t.AsTypedEventStreamEnvelopeSessionProviderLimitCleared()
+	case "session.provider_limited":
+		return t.AsTypedEventStreamEnvelopeSessionProviderLimited()
 	case "session.quarantined":
 		return t.AsTypedEventStreamEnvelopeSessionQuarantined()
 	case "session.reset_stalled":
@@ -24362,6 +24644,62 @@ func (t *TypedTaggedEventStreamEnvelope) MergeTypedTaggedEventStreamEnvelopeSess
 	return err
 }
 
+// AsTypedTaggedEventStreamEnvelopeSessionProviderLimitCleared returns the union data inside the TypedTaggedEventStreamEnvelope as a TypedTaggedEventStreamEnvelopeSessionProviderLimitCleared
+func (t TypedTaggedEventStreamEnvelope) AsTypedTaggedEventStreamEnvelopeSessionProviderLimitCleared() (TypedTaggedEventStreamEnvelopeSessionProviderLimitCleared, error) {
+	var body TypedTaggedEventStreamEnvelopeSessionProviderLimitCleared
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromTypedTaggedEventStreamEnvelopeSessionProviderLimitCleared overwrites any union data inside the TypedTaggedEventStreamEnvelope as the provided TypedTaggedEventStreamEnvelopeSessionProviderLimitCleared
+func (t *TypedTaggedEventStreamEnvelope) FromTypedTaggedEventStreamEnvelopeSessionProviderLimitCleared(v TypedTaggedEventStreamEnvelopeSessionProviderLimitCleared) error {
+	v.Type = "session.provider_limit_cleared"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeTypedTaggedEventStreamEnvelopeSessionProviderLimitCleared performs a merge with any union data inside the TypedTaggedEventStreamEnvelope, using the provided TypedTaggedEventStreamEnvelopeSessionProviderLimitCleared
+func (t *TypedTaggedEventStreamEnvelope) MergeTypedTaggedEventStreamEnvelopeSessionProviderLimitCleared(v TypedTaggedEventStreamEnvelopeSessionProviderLimitCleared) error {
+	v.Type = "session.provider_limit_cleared"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsTypedTaggedEventStreamEnvelopeSessionProviderLimited returns the union data inside the TypedTaggedEventStreamEnvelope as a TypedTaggedEventStreamEnvelopeSessionProviderLimited
+func (t TypedTaggedEventStreamEnvelope) AsTypedTaggedEventStreamEnvelopeSessionProviderLimited() (TypedTaggedEventStreamEnvelopeSessionProviderLimited, error) {
+	var body TypedTaggedEventStreamEnvelopeSessionProviderLimited
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromTypedTaggedEventStreamEnvelopeSessionProviderLimited overwrites any union data inside the TypedTaggedEventStreamEnvelope as the provided TypedTaggedEventStreamEnvelopeSessionProviderLimited
+func (t *TypedTaggedEventStreamEnvelope) FromTypedTaggedEventStreamEnvelopeSessionProviderLimited(v TypedTaggedEventStreamEnvelopeSessionProviderLimited) error {
+	v.Type = "session.provider_limited"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeTypedTaggedEventStreamEnvelopeSessionProviderLimited performs a merge with any union data inside the TypedTaggedEventStreamEnvelope, using the provided TypedTaggedEventStreamEnvelopeSessionProviderLimited
+func (t *TypedTaggedEventStreamEnvelope) MergeTypedTaggedEventStreamEnvelopeSessionProviderLimited(v TypedTaggedEventStreamEnvelopeSessionProviderLimited) error {
+	v.Type = "session.provider_limited"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 // AsTypedTaggedEventStreamEnvelopeSessionQuarantined returns the union data inside the TypedTaggedEventStreamEnvelope as a TypedTaggedEventStreamEnvelopeSessionQuarantined
 func (t TypedTaggedEventStreamEnvelope) AsTypedTaggedEventStreamEnvelopeSessionQuarantined() (TypedTaggedEventStreamEnvelopeSessionQuarantined, error) {
 	var body TypedTaggedEventStreamEnvelopeSessionQuarantined
@@ -25578,6 +25916,10 @@ func (t TypedTaggedEventStreamEnvelope) ValueByDiscriminator() (interface{}, err
 		return t.AsTypedTaggedEventStreamEnvelopeSessionPoolSlotRetiredAtDrainDeadline()
 	case "session.program_status_shadow":
 		return t.AsTypedTaggedEventStreamEnvelopeSessionProgramStatusShadow()
+	case "session.provider_limit_cleared":
+		return t.AsTypedTaggedEventStreamEnvelopeSessionProviderLimitCleared()
+	case "session.provider_limited":
+		return t.AsTypedTaggedEventStreamEnvelopeSessionProviderLimited()
 	case "session.quarantined":
 		return t.AsTypedTaggedEventStreamEnvelopeSessionQuarantined()
 	case "session.reset_stalled":
@@ -25984,6 +26326,11 @@ type ClientInterface interface {
 
 	// PutV0CityByCityNameFormulasByNameWithBody request with any body
 	PutV0CityByCityNameFormulasByNameWithBody(ctx context.Context, cityName string, name string, params *PutV0CityByCityNameFormulasByNameParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CookFormulaWithBody request with any body
+	CookFormulaWithBody(ctx context.Context, cityName string, name string, params *CookFormulaParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CookFormula(ctx context.Context, cityName string, name string, params *CookFormulaParams, body CookFormulaJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostV0CityByCityNameFormulasByNamePreviewWithBody request with any body
 	PostV0CityByCityNameFormulasByNamePreviewWithBody(ctx context.Context, cityName string, name string, params *PostV0CityByCityNameFormulasByNamePreviewParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -27438,6 +27785,30 @@ func (c *Client) GetV0CityByCityNameFormulasByName(ctx context.Context, cityName
 
 func (c *Client) PutV0CityByCityNameFormulasByNameWithBody(ctx context.Context, cityName string, name string, params *PutV0CityByCityNameFormulasByNameParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPutV0CityByCityNameFormulasByNameRequestWithBody(c.Server, cityName, name, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CookFormulaWithBody(ctx context.Context, cityName string, name string, params *CookFormulaParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCookFormulaRequestWithBody(c.Server, cityName, name, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CookFormula(ctx context.Context, cityName string, name string, params *CookFormulaParams, body CookFormulaJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCookFormulaRequest(c.Server, cityName, name, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -30814,6 +31185,22 @@ func NewGetV0CityByCityNameBeadsRequest(server string, cityName string, params *
 
 		}
 
+		if params.ExternalRef != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", false, "external_ref", *params.ExternalRef, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
 		queryURL.RawQuery = queryValues.Encode()
 	}
 
@@ -33458,6 +33845,84 @@ func NewPutV0CityByCityNameFormulasByNameRequestWithBody(server string, cityName
 		}
 
 		req.Header.Set("X-GC-Request", headerParam0)
+
+	}
+
+	return req, nil
+}
+
+// NewCookFormulaRequest calls the generic CookFormula builder with application/json body
+func NewCookFormulaRequest(server string, cityName string, name string, params *CookFormulaParams, body CookFormulaJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCookFormulaRequestWithBody(server, cityName, name, params, "application/json", bodyReader)
+}
+
+// NewCookFormulaRequestWithBody generates requests for CookFormula with any type of body
+func NewCookFormulaRequestWithBody(server string, cityName string, name string, params *CookFormulaParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "cityName", cityName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v0/city/%s/formulas/%s/cook", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithOptions("simple", false, "X-GC-Request", params.XGCRequest, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("X-GC-Request", headerParam0)
+
+		if params.IdempotencyKey != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam1)
+		}
 
 	}
 
@@ -40705,6 +41170,11 @@ type ClientWithResponsesInterface interface {
 	// PutV0CityByCityNameFormulasByNameWithBodyWithResponse request with any body
 	PutV0CityByCityNameFormulasByNameWithBodyWithResponse(ctx context.Context, cityName string, name string, params *PutV0CityByCityNameFormulasByNameParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutV0CityByCityNameFormulasByNameResponse, error)
 
+	// CookFormulaWithBodyWithResponse request with any body
+	CookFormulaWithBodyWithResponse(ctx context.Context, cityName string, name string, params *CookFormulaParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CookFormulaResponse, error)
+
+	CookFormulaWithResponse(ctx context.Context, cityName string, name string, params *CookFormulaParams, body CookFormulaJSONRequestBody, reqEditors ...RequestEditorFn) (*CookFormulaResponse, error)
+
 	// PostV0CityByCityNameFormulasByNamePreviewWithBodyWithResponse request with any body
 	PostV0CityByCityNameFormulasByNamePreviewWithBodyWithResponse(ctx context.Context, cityName string, name string, params *PostV0CityByCityNameFormulasByNamePreviewParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostV0CityByCityNameFormulasByNamePreviewResponse, error)
 
@@ -42895,6 +43365,36 @@ func (r PutV0CityByCityNameFormulasByNameResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r PutV0CityByCityNameFormulasByNameResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CookFormulaResponse struct {
+	Body                      []byte
+	HTTPResponse              *http.Response
+	JSON201                   *FormulaCookOutputBody
+	ApplicationproblemJSON400 *ErrorModel
+	ApplicationproblemJSON401 *ErrorModel
+	ApplicationproblemJSON403 *ErrorModel
+	ApplicationproblemJSON404 *ErrorModel
+	ApplicationproblemJSON409 *ErrorModel
+	ApplicationproblemJSON422 *ErrorModel
+	ApplicationproblemJSON500 *ErrorModel
+	ApplicationproblemJSON501 *ErrorModel
+}
+
+// Status returns HTTPResponse.Status
+func (r CookFormulaResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CookFormulaResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -46622,6 +47122,23 @@ func (c *ClientWithResponses) PutV0CityByCityNameFormulasByNameWithBodyWithRespo
 		return nil, err
 	}
 	return ParsePutV0CityByCityNameFormulasByNameResponse(rsp)
+}
+
+// CookFormulaWithBodyWithResponse request with arbitrary body returning *CookFormulaResponse
+func (c *ClientWithResponses) CookFormulaWithBodyWithResponse(ctx context.Context, cityName string, name string, params *CookFormulaParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CookFormulaResponse, error) {
+	rsp, err := c.CookFormulaWithBody(ctx, cityName, name, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCookFormulaResponse(rsp)
+}
+
+func (c *ClientWithResponses) CookFormulaWithResponse(ctx context.Context, cityName string, name string, params *CookFormulaParams, body CookFormulaJSONRequestBody, reqEditors ...RequestEditorFn) (*CookFormulaResponse, error) {
+	rsp, err := c.CookFormula(ctx, cityName, name, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCookFormulaResponse(rsp)
 }
 
 // PostV0CityByCityNameFormulasByNamePreviewWithBodyWithResponse request with arbitrary body returning *PostV0CityByCityNameFormulasByNamePreviewResponse
@@ -51952,6 +52469,88 @@ func ParsePutV0CityByCityNameFormulasByNameResponse(rsp *http.Response) (*PutV0C
 			return nil, err
 		}
 		response.ApplicationproblemJSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest ErrorModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
+		var dest ErrorModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON501 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCookFormulaResponse parses an HTTP response from a CookFormulaWithResponse call
+func ParseCookFormulaResponse(rsp *http.Response) (*CookFormulaResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CookFormulaResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest FormulaCookOutputBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
 		var dest ErrorModel

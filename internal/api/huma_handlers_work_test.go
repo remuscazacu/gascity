@@ -66,6 +66,7 @@ func fullReadyBead() readywork.ReadyBead {
 		DeferUntil:   &deferUntil,
 		IsBlocked:    &blocked,
 		CloseReason:  "reason",
+		ExternalRef:  "sor:2015000",
 		BlockedBy:    []readywork.ReadyBeadBlocker{{ID: "gc-0", Status: "open"}},
 	}
 }
