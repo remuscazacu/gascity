@@ -879,6 +879,8 @@ cmd/gc/doctor_pool_idle_routed_work_check.go	poolIdleRoutedWorkCheck	raw-field	1
 cmd/gc/doctor_pool_idle_routed_work_check.go	poolIdleRoutedWorkCheck.collectIdleInstances	raw-param	1
 cmd/gc/doctor_pool_idle_routed_work_check.go	poolIdleRoutedWorkScope	raw-field	1
 cmd/gc/doctor_pool_idle_routed_work_check.go	unclaimedRoutedWork	raw-param	1
+cmd/gc/doctor_provider_usage_limit.go	newProviderUsageLimitCheck	raw-param	1
+cmd/gc/doctor_provider_usage_limit.go	providerUsageLimitCheck	raw-field	1
 cmd/gc/doctor_route_recovery_quarantine.go	newRouteRecoveryQuarantineCheck	raw-param	1
 cmd/gc/doctor_route_recovery_quarantine.go	quarantinedRoute	raw-field	1
 cmd/gc/doctor_route_recovery_quarantine.go	routeRecoveryQuarantineCheck	raw-field	1
@@ -952,6 +954,9 @@ cmd/gc/formula_bead_resolver.go	CityRuntime.formulaBeadResolver	raw-result	1
 cmd/gc/formula_bead_resolver.go	newLazyBeadResolver	raw-param	1
 cmd/gc/formula_cook_attach_class.go	attachGraftClassRefusal	raw-param	2
 cmd/gc/formula_cook_attach_class.go	attachGraftClassRefusal	read-marker	1
+cmd/gc/formula_cook_standalone.go	cookFormulaStandalone	mint	1
+cmd/gc/formula_cook_standalone.go	cookFormulaStandalone	raw-param	2
+cmd/gc/formula_cook_standalone.go	formulaCookStandaloneResult	raw-field	1
 cmd/gc/graph_placement.go	graphPlacementForScope	raw-param	1
 cmd/gc/graph_placement.go	graphPlacementForScope	raw-result	1
 cmd/gc/graph_placement.go	graphRelicLegForScope	cap-assert	1
