@@ -188,7 +188,11 @@ var builtinAuthorship = map[string]Authorship{
 	SessionStrandedClaims: AuthorWorker,
 
 	// Controller: the reconciler's session lifecycle.
-	SessionWoke:                           AuthorController,
+	SessionWoke: AuthorController,
+	// The session reconciler records a usage-limit hold off a pane capture
+	// (cmd/gc/session_provider_usage_limit.go, sr-bylv).
+	SessionProviderLimited:                AuthorController,
+	SessionProviderLimitCleared:           AuthorController,
 	SessionCrashed:                        AuthorController,
 	SessionQuarantined:                    AuthorController,
 	SessionIdleKilled:                     AuthorController,

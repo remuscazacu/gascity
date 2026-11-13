@@ -72,6 +72,9 @@ func beadFromGen(g genclient.Bead) beads.Bead {
 	if g.From != nil {
 		out.From = *g.From
 	}
+	if g.ExternalRef != nil {
+		out.ExternalRef = *g.ExternalRef
+	}
 	if g.Parent != nil {
 		out.ParentID = *g.Parent
 	}

@@ -187,6 +187,7 @@ func TestBeadFromGenRoundTripsEveryBeadJSONField(t *testing.T) {
 		DeferUntil:   &deferUntil,
 		IsBlocked:    &blocked,
 		CloseReason:  "done",
+		ExternalRef:  "sor:2015000",
 	}
 	rv := reflect.ValueOf(want)
 	for i := 0; i < rv.NumField(); i++ {
