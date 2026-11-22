@@ -78,11 +78,19 @@ describe('selectAgentsNeedingYou', () => {
     ]);
   });
 
+  test("does not report a 'waiting' agent (holding work, quiet) as rate-limited (sr-u9ua)", () => {
+    const result = selectAgentsNeedingYou(
+      [agent({ name: 'parked', running: true, state: 'waiting', session: liveSession })],
+      [],
+    );
+    assert.deepEqual(result, []);
+  });
+
   test('carries the action verb per reason and a structural detail phrase', () => {
     const result = selectAgentsNeedingYou(
       [
         agent({ name: 'crashed', state: 'errored' }),
-        agent({ name: 'throttled', running: true, state: 'waiting', session: liveSession }),
+        agent({ name: 'throttled', running: true, state: 'rate_limited', session: liveSession }),
         agent({ name: 'ghost', running: true, state: 'running' }),
       ],
       [],

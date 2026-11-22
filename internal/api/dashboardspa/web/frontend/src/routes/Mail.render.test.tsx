@@ -294,6 +294,22 @@ afterEach(() => {
 });
 
 describe('MailPage supervisor reads', () => {
+  it('lays the list out fixed as From | When | Subject (sr-u9ua)', async () => {
+    renderMailPage();
+    await screen.findByText('direct supervisor inbox');
+
+    const table = document.querySelector('table')!;
+    expect(table.className).toContain('table-fixed');
+    const headers = Array.from(table.querySelectorAll('thead th')).map((th) =>
+      (th.textContent ?? '').replace(/[↑↓]/g, '').trim(),
+    );
+    expect(headers.filter((h) => h.length > 0)).toEqual(['From', 'When', 'Subject']);
+    const row = screen.getByText('direct supervisor inbox').closest('tr')!;
+    const time = row.querySelector('time')!;
+    expect(time.getAttribute('datetime')).toBeTruthy();
+    expect(row.querySelectorAll('td')[headers.indexOf('When')]!.contains(time)).toBe(true);
+  });
+
   it('loads the operator inbox from the supervisor API instead of the dashboard GET mirror', async () => {
     renderMailPage();
 
