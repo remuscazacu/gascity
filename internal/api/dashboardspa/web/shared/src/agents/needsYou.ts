@@ -41,11 +41,11 @@ export interface AgentPendingSignal {
 // case-insensitively. Aligned with StatusBadge.stateTone and Agents synopsis
 // bucketing so the three readers classify a state the same way.
 const FAILURE_STATES: ReadonlySet<string> = new Set(['failed', 'errored', 'stuck', 'crashed']);
-const RATE_LIMITED_STATES: ReadonlySet<string> = new Set([
-  'rate-limited',
-  'rate_limited',
-  'waiting',
-]);
+// 'waiting' is NOT a throttle (sr-u9ua): the supervisor's computeAgentState
+// emits it for a running agent that holds a bead and has been quiet for 10+
+// minutes, e.g. parked on a person. A real provider limit arrives as
+// 'rate_limited'.
+const RATE_LIMITED_STATES: ReadonlySet<string> = new Set(['rate-limited', 'rate_limited']);
 
 const ACTION_BY_REASON: Record<AgentNeedsYouReason, AgentNeedsYouAction> = {
   'awaiting-input': 'respond',

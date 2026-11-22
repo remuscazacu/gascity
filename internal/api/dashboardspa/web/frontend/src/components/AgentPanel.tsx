@@ -3,10 +3,11 @@ import { useOperatorConfig } from '../contexts/OperatorConfigContext';
 import { displayLabel, tierLabel, type AliasBucket } from '../hooks/aliasPriority';
 
 // Shared rail shell for both panel states: full-width with a bottom rule on
-// mobile, fixed-width with a right-edge rule from sm up; only the sm width
+// narrow screens, fixed-width with a right-edge rule from lg up (sr-u9ua:
+// beside the list from sm it squeezed Mail to ~350px); only the lg width
 // varies per state.
 const ASIDE_BASE_CLASS =
-  'border-rule pb-6 border-b sm:shrink-0 sm:pr-6 sm:pb-0 sm:border-b-0 sm:border-r';
+  'border-rule pb-6 border-b lg:shrink-0 lg:pr-6 lg:pb-0 lg:border-b-0 lg:border-r';
 
 export function AgentPanel({
   buckets,
@@ -63,7 +64,7 @@ export function AgentPanel({
 
   if (!expanded) {
     return (
-      <aside className={`${ASIDE_BASE_CLASS} sm:w-44`}>
+      <aside className={`${ASIDE_BASE_CLASS} lg:w-44`}>
         <button
           type="button"
           onClick={() => setExpanded(true)}
@@ -100,7 +101,7 @@ export function AgentPanel({
   }
 
   return (
-    <aside className={`${ASIDE_BASE_CLASS} sm:w-64`}>
+    <aside className={`${ASIDE_BASE_CLASS} lg:w-64`}>
       <button
         type="button"
         onClick={() => setExpanded(false)}

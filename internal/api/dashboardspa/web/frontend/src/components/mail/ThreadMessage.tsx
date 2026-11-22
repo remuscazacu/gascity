@@ -28,7 +28,7 @@ export function ThreadMessage({
       </header>
       <p className="text-title font-semibold text-fg">{message.subject}</p>
       <StatusBadge tone="warn" label={PROMPT_INJECTION_NOTICE} />
-      <pre className="text-body whitespace-pre-wrap leading-relaxed text-fg overflow-x-auto">
+      <pre className="text-body whitespace-pre-wrap [overflow-wrap:anywhere] leading-relaxed text-fg">
         {message.body}
       </pre>
     </article>

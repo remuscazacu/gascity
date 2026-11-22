@@ -78,6 +78,14 @@ export function beadStatusTone(status: string): StatusTone {
 // mappers here so display components depend only on StatusBadge, not on the
 // Agents route (which would be an import cycle: Agents imports WorkInFlight,
 // WorkInFlight imported stateTone from Agents).
+/**
+ * Display word for a supervisor agent/session state. Only states whose raw
+ * enum reads wrong to an operator are renamed; everything else shows as-is.
+ */
+export function stateLabel(state: string): string {
+  return state === 'waiting' ? 'holding work' : state;
+}
+
 export function stateTone(state: string): StatusTone {
   switch (state) {
     case 'active':
@@ -85,13 +93,15 @@ export function stateTone(state: string): StatusTone {
       return 'ok';
     case 'rate-limited':
     case 'rate_limited':
-    case 'waiting':
       return 'warn';
     case 'failed':
     case 'closed':
     case 'errored':
     case 'stuck':
       return 'stuck';
+    // 'waiting' = running, holds a bead, quiet 10+ min (sr-u9ua). Not a
+    // throttle and not a fault, so it reads neutral as "holding work".
+    case 'waiting':
     case 'detached':
     case 'asleep':
     case 'idle':

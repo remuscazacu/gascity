@@ -224,13 +224,36 @@ export function MailPage() {
 
   const columns = useMemo<ReadonlyArray<TableColumn<SupervisorMailItem>>>(
     () => [
+      // sr-u9ua: From | When | Subject. The table is fixed-layout, so From
+      // takes a share of the width, When is exactly wide enough for "365d"
+      // and its header, and Subject gets the rest (and truncates for real).
+      // Widths are sm:-scoped: below sm the row is a grid and a body cell's
+      // 32% would squeeze the sender to a third of the row.
       {
         key: 'from',
         label: 'From',
         sortable: true,
         sortValue: (r) => formatMailSender(r.from),
-        render: (r) => <span className="text-fg-muted">{formatMailSender(r.from)}</span>,
-        className: 'w-48',
+        render: (r) => (
+          <span className="block truncate text-fg-muted" title={formatMailSender(r.from)}>
+            {formatMailSender(r.from)}
+          </span>
+        ),
+        className: 'sm:w-[32%]',
+      },
+      {
+        key: 'created_at',
+        label: 'When',
+        sortable: true,
+        sortValue: (r) => r.created_at,
+        render: (r) => (
+          <time className="tnum text-fg-muted" dateTime={r.created_at} title={r.created_at}>
+            {formatRelative(r.created_at, now)}
+          </time>
+        ),
+        className: 'sm:w-[3.75rem]',
+        padRight: 'tight',
+        stackClassName: 'max-sm:text-right',
       },
       {
         key: 'subject',
@@ -247,17 +270,7 @@ export function MailPage() {
             </p>
           </div>
         ),
-      },
-      {
-        key: 'created_at',
-        label: 'When',
-        sortable: true,
-        sortValue: (r) => r.created_at,
-        render: (r) => (
-          <span className="tnum text-fg-muted">{formatRelative(r.created_at, now)}</span>
-        ),
-        className: 'w-24',
-        align: 'right',
+        stackClassName: 'max-sm:col-span-2',
       },
     ],
     [now],
@@ -368,7 +381,9 @@ export function MailPage() {
     () => ({
       key: '__select',
       label: '',
-      className: 'w-8',
+      className: 'sm:w-6',
+      padRight: 'none',
+      stackClassName: 'max-sm:row-span-2',
       render: (r) => (
         <input
           type="checkbox"
@@ -441,9 +456,10 @@ export function MailPage() {
         }
       />
 
-      {/* Below sm the reading-as rail stacks above the list; its divider
-          rotates from right-edge rule to bottom rule in AgentPanel. */}
-      <div className="flex flex-col gap-8 sm:flex-row sm:items-start">
+      {/* Below lg the reading-as rail stacks above the list (sr-u9ua: beside
+          it from sm the list was squeezed to ~350px); its divider rotates from
+          right-edge rule to bottom rule in AgentPanel. */}
+      <div className="flex flex-col gap-8 lg:flex-row lg:items-start">
         <AgentPanel
           buckets={aliasBuckets}
           loading={aliasesLoading}
@@ -524,6 +540,12 @@ export function MailPage() {
             }
             perProjectEmpty="No messages in this project."
             initialSort={{ key: 'created_at', dir: 'desc' }}
+            layout="fixed"
+            stackBelowSm={{
+              rowClassName: selectable
+                ? 'max-sm:grid max-sm:grid-cols-[1.375rem_minmax(0,1fr)_auto] max-sm:gap-x-2 max-sm:py-3'
+                : 'max-sm:grid max-sm:grid-cols-[minmax(0,1fr)_auto] max-sm:gap-x-2 max-sm:py-3',
+            }}
           />
         </div>
       </div>
