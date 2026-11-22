@@ -21,7 +21,7 @@ import { PartialDataNotice } from '../components/PartialDataNotice';
 import { WorkInFlight } from '../components/WorkInFlight';
 import { LiveSessionPeek, isAgentStreamable } from '../components/LiveSessionPeek';
 import { SseIndicator } from '../components/SseIndicator';
-import { StatusBadge, stateTone } from '../components/StatusBadge';
+import { StatusBadge, stateLabel, stateTone } from '../components/StatusBadge';
 import { Table, type TableColumn } from '../components/Table';
 import { useNow } from '../contexts/NowContext';
 import { READ_ONLY_CONTROL_TITLE, ReadOnlyBadge, useReadOnly } from '../contexts/ReadOnlyContext';
@@ -319,7 +319,7 @@ export function AgentsPage() {
         render: (r) => (
           <StatusBadge
             tone={stateTone(r.state)}
-            label={r.state}
+            label={stateLabel(r.state)}
             {...(r.session?.attached ? { trailing: 'att' } : {})}
             {...(r.unavailable_reason ? { title: `unavailable: ${r.unavailable_reason}` } : {})}
           />
@@ -672,6 +672,7 @@ export type SynopsisBucket =
   | 'active'
   | 'idle'
   | 'detached'
+  | 'holding-work'
   | 'rate-limited'
   | 'stuck'
   | 'suspended';
@@ -684,9 +685,10 @@ function stateBucket(agent: SupervisorAgent): SynopsisBucket {
       return 'active';
     case 'detached':
       return 'detached';
+    case 'waiting':
+      return 'holding-work';
     case 'rate-limited':
     case 'rate_limited':
-    case 'waiting':
       return 'rate-limited';
     case 'failed':
     case 'closed':
@@ -709,12 +711,14 @@ export function buildAgentSynopsis(rows: ReadonlyArray<SupervisorAgent>): string
   const active = counts.get('active') ?? 0;
   const idle = counts.get('idle') ?? 0;
   const detached = counts.get('detached') ?? 0;
+  const holdingWork = counts.get('holding-work') ?? 0;
   const rateLimited = counts.get('rate-limited') ?? 0;
   const stuck = counts.get('stuck') ?? 0;
   const suspended = counts.get('suspended') ?? 0;
   if (active > 0) parts.push(`${active} active`);
   if (idle > 0) parts.push(`${idle} idle`);
   if (detached > 0) parts.push(`${detached} detached`);
+  if (holdingWork > 0) parts.push(`${holdingWork} holding work`);
   if (rateLimited > 0) parts.push(`${rateLimited} rate-limited`);
   if (stuck > 0) parts.push(`${stuck} stuck`);
   if (suspended > 0) parts.push(`${suspended} suspended`);

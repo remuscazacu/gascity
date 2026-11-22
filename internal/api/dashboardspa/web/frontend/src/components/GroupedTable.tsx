@@ -20,6 +20,10 @@ interface GroupedTableProps<T> {
   /** Per-project empty (rare: filters return zero rows for a project). */
   perProjectEmpty?: ReactNode;
   initialSort?: SortState | null;
+  /** Forwarded to every group's Table (see Table's `layout`). */
+  layout?: 'auto' | 'fixed';
+  /** Forwarded to every group's Table (see Table's `stackBelowSm`). */
+  stackBelowSm?: { rowClassName: string };
 }
 
 export function GroupedTable<T>({
@@ -32,6 +36,8 @@ export function GroupedTable<T>({
   emptyMessage,
   perProjectEmpty,
   initialSort,
+  layout,
+  stackBelowSm,
 }: GroupedTableProps<T>) {
   if (groups.length === 0) {
     return <p className="py-10 text-center text-fg-muted italic">{emptyMessage}</p>;
@@ -57,6 +63,8 @@ export function GroupedTable<T>({
               {...(onRowClick !== undefined ? { onRowClick } : {})}
               {...(rowProps !== undefined ? { rowProps } : {})}
               {...(initialSort !== undefined ? { initialSort } : {})}
+              {...(layout !== undefined ? { layout } : {})}
+              {...(stackBelowSm !== undefined ? { stackBelowSm } : {})}
             />
           )}
         </section>

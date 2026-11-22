@@ -139,6 +139,13 @@ describe('buildAgentSynopsis', () => {
     expect(buildAgentSynopsis(rows)).toContain('1 suspended');
   });
 
+  it("counts 'waiting' as holding work, not rate-limited (sr-u9ua)", () => {
+    const rows: AgentResponse[] = [mkAgent('waiting'), mkAgent('rate_limited')];
+    const synopsis = buildAgentSynopsis(rows);
+    expect(synopsis).toContain('1 holding work');
+    expect(synopsis).toContain('1 rate-limited');
+  });
+
   it('returns the empty-state sentence when no rows', () => {
     expect(buildAgentSynopsis([])).toBe('No agents configured.');
   });
